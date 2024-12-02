@@ -1,0 +1,16 @@
+python-jose[cryptography]
+fastapi[standard]
+uvicorn[standard]
+python-multipart
+transformers
+bitsandbytes
+torchvision
+argon2-cffi
+accelerate
+tensorflow
+pydantic
+tf-keras
+mlflow
+psutil
+torch
+lz4
