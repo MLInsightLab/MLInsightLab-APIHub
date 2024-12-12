@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 # Copy and install main files
+COPY ./templates.py /code/templates.py
 COPY ./db_utils.py /code/db_utils.py
 COPY ./utils.py /code/utils.py
 COPY ./main.py /code/main.py
