@@ -2,6 +2,7 @@ from transformers import pipeline, BitsAndBytesConfig
 from db_utils import SERVED_MODEL_CACHE_FILE
 from templates import PredictRequest
 from subprocess import check_call
+import datetime as dt
 import numpy as np
 import subprocess
 import mlflow
@@ -184,25 +185,17 @@ def save_prediction(
     username: str
 ):
     prediction_file_path = os.path.join(
-        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
-    to_append = {
+        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias, str(dt.datetime.now()))
+    prediction_data = {
         'input': body.model_dump(),
         'prediction': prediction,
         'username': username
     }
-    if not os.path.exists(prediction_file_path):
+    if not os.path.exists(os.path.dirname(prediction_file_path)):
         os.makedirs(os.path.dirname(prediction_file_path))
-        predictions = [
-            to_append
-        ]
-
-    else:
-        with open(prediction_file_path, 'r') as f:
-            predictions = json.load(f)
-        predictions.append(to_append)
 
     with open(prediction_file_path, 'w') as f:
-        json.dump(predictions, f)
+        json.dump(prediction_data, f)
 
     return True
 
@@ -214,13 +207,18 @@ def get_predictions(
         model_flavor: str,
         model_version_or_alias: str
 ):
-    prediction_file_path = os.path.join(
+    prediction_directory = os.path.join(
         PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
-    if not os.path.exists(prediction_file_path):
+    if not os.path.exists(prediction_directory):
         return None
-    else:
-        with open(prediction_file_path, 'r') as f:
-            predictions = json.load(f)
+    
+    files = os.listdir(prediction_directory)
+
+    predictions = {}
+    for file in files:
+        with open(os.path.join(prediction_directory, file), 'r') as f:
+            predictions[file] = json.load(f)
+
     return predictions
 
 # Predict_model function that runs prediction
