@@ -12,7 +12,8 @@ import json
 import os
 
 from db_utils import setup_database, validate_user_key, validate_user_password, fcreate_user, fdelete_user, fissue_new_api_key, fissue_new_password, fget_user_role, fupdate_user_role, flist_users, SERVED_MODEL_CACHE_FILE
-from utils import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, VARIABLE_STORE_FILE, fload_model, load_models_from_cache, predict_model, upload_data_to_fs, download_data_from_fs, PredictRequest, LoadRequest, UserInfo, DataUploadRequest, DataDownloadRequest, VariableSetRequest, VariableDownloadRequest, VariableDeleteRequest, VerifyPasswordInfo, list_fs_directory, DataListRequest
+from utils import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, VARIABLE_STORE_FILE, fload_model, load_models_from_cache, predict_model, upload_data_to_fs, download_data_from_fs, list_fs_directory, save_prediction, get_predictions
+from templates import *
 
 # Set up variables for JWT authentication
 SECRET_KEY = ''.join([secrets.choice(string.ascii_letters) for _ in range(32)])
@@ -532,18 +533,65 @@ def predict(model_name: str, model_flavor: str, model_version_or_alias: str | in
         )
 
     try:
-        return predict_model(
+        prediction = predict_model(
             model,
             to_predict,
             model_flavor,
             body.predict_function,
             body.params
         )
+
+        # Save the predictions
+        save_prediction(
+            model_name=model_name,
+            model_flavor=model_flavor,
+            model_version_or_alias=model_version_or_alias,
+            body=body,
+            prediction=prediction,
+            username=user_properties['username']
+        )
+
+        return prediction
     except Exception as e:
         raise HTTPException(400, str(e))
 
+
+@app.get('/predictions/{model_name}/{model_flavor}/{model_version_or_alias}')
+def predictions(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
+    """
+    Retrieve predictions made from a model
+
+    Parameters
+    ----------
+    model_name : str
+        The name of the model
+    model_flavor : str
+        The flavor of the model
+    model_version_or_alias : str | int
+        The version or alias of the model
+    """
+
+    if user_properties['role'] not in ['admin', 'data_scientist']:
+        raise HTTPException(
+            403,
+            'User does not have permissions'
+        )
+
+    try:
+        predictions = get_predictions(
+            model_name=model_name,
+            model_flavor=model_flavor,
+            model_version_or_alias=model_version_or_alias
+        )
+        return predictions
+
+    except Exception as e:
+        raise HTTPException(
+            400,
+            f'The following error occurred: {str(e)}'
+        )
+
 # Create User
-# Need to create prototype for this, and verify that the user has admin access
 
 
 @app.post('/users/create')
