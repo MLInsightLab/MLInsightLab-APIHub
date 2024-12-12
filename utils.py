@@ -1,7 +1,7 @@
 from transformers import pipeline, BitsAndBytesConfig
 from db_utils import SERVED_MODEL_CACHE_FILE
+from templates import PredictRequest
 from subprocess import check_call
-from pydantic import BaseModel
 import numpy as np
 import subprocess
 import mlflow
@@ -34,6 +34,9 @@ DATA_DIRECTORY = os.environ['DATA_DIRECTORY']
 VARIABLE_STORE_DIRECTORY = os.environ['VARIABLE_STORE_DIRECTORY']
 VARIABLE_STORE_FILE = os.path.join(
     VARIABLE_STORE_DIRECTORY, 'variable_store.json')
+
+# Location to store predictions
+PREDICTIONS_DIR = os.environ['PREDICTIONS_CACHE_DIR']
 
 # Load_model function that allows to load model from either alias or version
 
@@ -169,6 +172,57 @@ def load_models_from_cache():
     except Exception:
         return None
 
+# Save prediction
+
+
+def save_prediction(
+    model_name: str,
+    model_flavor: str,
+    model_version_or_alias: str | int,
+    body: PredictRequest,
+    prediction: list,
+    username: str
+):
+    prediction_file_path = os.path.join(
+        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
+    to_append = {
+        'input': body.model_dump(),
+        'prediction': prediction,
+        'username': username
+    }
+    if not os.path.exists(prediction_file_path):
+        os.makedirs(os.path.dirname(prediction_file_path))
+        predictions = [
+            to_append
+        ]
+
+    else:
+        with open(prediction_file_path, 'r') as f:
+            predictions = json.load(f)
+        predictions.append(to_append)
+
+    with open(prediction_file_path, 'w') as f:
+        json.dump(predictions, f)
+
+    return True
+
+# Get predictions
+
+
+def get_predictions(
+        model_name: str,
+        model_flavor: str,
+        model_version_or_alias: str
+):
+    prediction_file_path = os.path.join(
+        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
+    if not os.path.exists(prediction_file_path):
+        return None
+    else:
+        with open(prediction_file_path, 'r') as f:
+            predictions = json.load(f)
+    return predictions
+
 # Predict_model function that runs prediction
 
 
@@ -244,6 +298,8 @@ def predict_model(
     }
 
 
+# Upload data to data store
+
 def upload_data_to_fs(
         filename: str,
         file_bytes: str,
@@ -301,6 +357,8 @@ def upload_data_to_fs(
 
     return filename
 
+# Download data from data store
+
 
 def download_data_from_fs(
         filename: str
@@ -333,6 +391,8 @@ def download_data_from_fs(
 
     return content
 
+# List data in the data store
+
 
 def list_fs_directory(dirname: str = None) -> list[str]:
     """
@@ -362,57 +422,3 @@ def list_fs_directory(dirname: str = None) -> list[str]:
         raise TypeError('No directory found')
 
     return os.listdir(dirname)
-
-
-class PredictRequest(BaseModel):
-    data: list
-    predict_function: str = 'predict'
-    dtype: str = None
-    params: dict = None
-    convert_to_numpy: bool = True
-
-
-class LoadRequest(BaseModel):
-    requirements: str | None = None
-    quantization_kwargs: dict | None = None
-    kwargs: dict | None = None
-
-
-class UserInfo(BaseModel):
-    username: str
-    role: str
-    api_key: str | None = None
-    password: str | None = None
-
-
-class DataUploadRequest(BaseModel):
-    filename: str
-    file_bytes: str
-    overwrite: bool = False
-
-
-class DataDownloadRequest(BaseModel):
-    filename: str
-
-
-class VariableSetRequest(BaseModel):
-    variable_name: str
-    value: str | int | float | bool | dict | list
-    overwrite: bool = False
-
-
-class VariableDownloadRequest(BaseModel):
-    variable_name: str | int | float | bool | dict | list
-
-
-class VariableDeleteRequest(BaseModel):
-    variable_name: str
-
-
-class VerifyPasswordInfo(BaseModel):
-    username: str
-    password: str
-
-
-class DataListRequest(BaseModel):
-    directory: str | None = None

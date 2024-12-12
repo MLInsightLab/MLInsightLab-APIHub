@@ -1,0 +1,55 @@
+from pydantic import BaseModel
+
+
+class PredictRequest(BaseModel):
+    data: list
+    predict_function: str = 'predict'
+    dtype: str = None
+    params: dict = None
+    convert_to_numpy: bool = True
+
+
+class LoadRequest(BaseModel):
+    requirements: str | None = None
+    quantization_kwargs: dict | None = None
+    kwargs: dict | None = None
+
+
+class UserInfo(BaseModel):
+    username: str
+    role: str
+    api_key: str | None = None
+    password: str | None = None
+
+
+class DataUploadRequest(BaseModel):
+    filename: str
+    file_bytes: str
+    overwrite: bool = False
+
+
+class DataDownloadRequest(BaseModel):
+    filename: str
+
+
+class VariableSetRequest(BaseModel):
+    variable_name: str
+    value: str | int | float | bool | dict | list
+    overwrite: bool = False
+
+
+class VariableDownloadRequest(BaseModel):
+    variable_name: str | int | float | bool | dict | list
+
+
+class VariableDeleteRequest(BaseModel):
+    variable_name: str
+
+
+class VerifyPasswordInfo(BaseModel):
+    username: str
+    password: str
+
+
+class DataListRequest(BaseModel):
+    directory: str | None = None
