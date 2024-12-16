@@ -3,6 +3,7 @@ from db_utils import SERVED_MODEL_CACHE_FILE
 from templates import PredictRequest
 from subprocess import check_call
 import datetime as dt
+from glob import glob
 import numpy as np
 import subprocess
 import mlflow
@@ -199,6 +200,13 @@ def save_prediction(
 
     return True
 
+# List models in the predictions directory
+
+
+def list_models_with_predictions():
+    model_dirs = glob(f'{PREDICTIONS_DIR}/*/*/*')
+    return [d.split('/')[2:] for d in model_dirs]
+
 # Get predictions
 
 
@@ -211,7 +219,7 @@ def get_predictions(
         PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
     if not os.path.exists(prediction_directory):
         return None
-    
+
     files = os.listdir(prediction_directory)
 
     predictions = {}
