@@ -12,7 +12,7 @@ import json
 import os
 
 from db_utils import setup_database, validate_user_key, validate_user_password, fcreate_user, fdelete_user, fissue_new_api_key, fissue_new_password, fget_user_role, fupdate_user_role, flist_users, SERVED_MODEL_CACHE_FILE
-from utils import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, VARIABLE_STORE_FILE, fload_model, load_models_from_cache, predict_model, upload_data_to_fs, download_data_from_fs, list_fs_directory, save_prediction, get_predictions
+from utils import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, VARIABLE_STORE_FILE, fload_model, load_models_from_cache, predict_model, upload_data_to_fs, download_data_from_fs, list_fs_directory, save_prediction, get_predictions, list_models_with_predictions
 from templates import *
 
 # Set up variables for JWT authentication
@@ -554,6 +554,24 @@ def predict(model_name: str, model_flavor: str, model_version_or_alias: str | in
         return prediction
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+@app.get('/predictions/models')
+def list_predicted_models(user_properties: dict = Depends(verify_credentials_or_token)):
+    if user_properties['role'] not in ['admin', 'data_scientist']:
+        raise HTTPException(
+            403,
+            'User does not have permissions'
+        )
+
+    try:
+        models = list_models_with_predictions()
+        return models
+    except Exception as e:
+        raise HTTPException(
+            400,
+            f'The following error occurred: {str(e)}'
+        )
 
 
 @app.get('/predictions/{model_name}/{model_flavor}/{model_version_or_alias}')
