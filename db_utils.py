@@ -1,28 +1,9 @@
+from global_variables import DB_FILE, ADMIN_USERNAME, HASHED_ADMIN_KEY, HASHED_ADMIN_PASSWORD
 import sqlite3
 import argon2
 import string
 import random
 import os
-
-# Database location
-DB_DIRECTORY = '/database'
-DB_FILE = os.path.join(DB_DIRECTORY, 'permissions.db')
-
-# Admin username, password, and key
-ADMIN_USERNAME = os.environ['ADMIN_USERNAME']
-ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
-ADMIN_KEY = os.environ['ADMIN_KEY']
-
-# Hashed admin key and password
-HASHED_ADMIN_KEY = argon2.PasswordHasher().hash(ADMIN_KEY)
-HASHED_ADMIN_PASSWORD = argon2.PasswordHasher().hash(ADMIN_PASSWORD)
-
-# Location to cache state of loaded models
-SERVED_MODEL_CACHE_DIR = os.environ['SERVED_MODEL_CACHE_DIR']
-SERVED_MODEL_CACHE_FILE = os.path.join(SERVED_MODEL_CACHE_DIR, 'models.json')
-
-# Password requirements
-MINIMUM_PASSWORD_LENGTH = 8
 
 # Function to generate an API key
 
