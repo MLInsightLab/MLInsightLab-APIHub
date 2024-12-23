@@ -1,5 +1,8 @@
 FROM python:3.12
 
+# Update software
+RUN apt update && apt upgrade -y && apt autoremove -y
+
 # Change the workdir
 WORKDIR /code
 
@@ -21,6 +24,3 @@ RUN adduser root mlil
 
 # Expose necessary port
 EXPOSE 4488
-
-# Run the service
-CMD [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4488", "--root-path", "/api" ]
