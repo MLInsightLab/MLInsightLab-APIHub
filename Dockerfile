@@ -13,10 +13,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 # Copy and install main files
-COPY ./templates.py /code/templates.py
+
 COPY ./db_utils.py /code/db_utils.py
-COPY ./utils.py /code/utils.py
+COPY ./fs_utils.py /code/fs_utils.py
+COPY ./global_variables.py /code/global_variables.py
 COPY ./main.py /code/main.py
+COPY ./model_utils.py /code/model_utils.py
+COPY ./templates /code/templates.py
 
 # Add group mlil and add root to that group
 RUN groupadd -g 1004 mlil
