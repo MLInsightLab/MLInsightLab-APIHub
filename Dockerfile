@@ -3,6 +3,9 @@ FROM python:3.12
 # Update software
 RUN apt update && apt upgrade -y && apt autoremove -y
 
+# Install docker command line tools
+RUN curl -fsSL https://get.docker.com | sh
+
 # Change the workdir
 WORKDIR /code
 

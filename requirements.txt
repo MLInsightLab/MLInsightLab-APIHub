@@ -12,5 +12,6 @@ pydantic
 tf-keras
 mlflow
 psutil
+docker
 torch
 lz4
