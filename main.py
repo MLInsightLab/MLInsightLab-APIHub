@@ -73,16 +73,20 @@ try:
                 # Get the uri of the model
                 mlflow_client = mlflow.MlflowClient()
                 try:
-                    model_uri = mlflow_client.get_model_version_by_alias(
+                    model_source = mlflow_client.get_model_version_by_alias(
                         model_name,
                         model_version_or_alias
                     ).source
+                    if model_source:
+                        model_uri = f'models:/{model_name}@{model_version_or_alias}'
                 except Exception:
                     try:
-                        model_uri = mlflow_client.get_model_version(
+                        model_source = mlflow_client.get_model_version(
                             model_name,
                             model_version_or_alias
                         ).source
+                        if model_source:
+                            model_uri = f'models:/{model_name}/{model_version_or_alias}'
                     except Exception:
                         raise ValueError('Model not able to be loaded')
 
