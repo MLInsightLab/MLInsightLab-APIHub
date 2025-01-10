@@ -5,10 +5,10 @@ from glob import glob
 import datetime as dt
 import numpy as np
 import subprocess
+import requests
 import mlflow
 import json
 import os
-
 
 # Save prediction
 
@@ -43,7 +43,7 @@ def list_models_with_predictions():
     model_dirs = glob(f'{PREDICTIONS_DIR}/*/*/*')
     return [d.split('/')[2:] for d in model_dirs]
 
-# Get predictions
+# Get saved predictions
 
 
 def get_predictions(
@@ -69,18 +69,19 @@ def get_predictions(
 
 
 def predict_model(
-    model: mlflow.models.Model,
+    model: mlflow.models.Model | dict,
     to_predict: np.ndarray,
     model_flavor: str,
     predict_function: str,
-    params: dict
+    params: dict,
+    dtype: str = None
 ):
     f"""
     Make predictions with a model
 
     Parameters
     ----------
-    model : mlflow.models.Model
+    model : mlflow.models.Model or dictionary
         The model to run prediction on
     to_predict : np.ndarray or array-like
         The data to predict on
@@ -91,6 +92,33 @@ def predict_model(
     params : dict
         Parameters to run prediction with
     """
+
+    if isinstance(model, dict):
+        container_name = model['container_name']
+        container_port = '8888'
+        convert_to_numpy = False
+
+        if isinstance(to_predict, np.ndarray):
+            to_predict = to_predict.tolist()
+            convert_to_numpy = True
+
+        with requests.Session() as sess:
+            resp = sess.post(
+                f'http://{container_name}:{container_port}/predict',
+                json={
+                    'data': to_predict,
+                    'predict_function': predict_function,
+                    'convert_to_numpy': convert_to_numpy,
+                    'params': params,
+                    'dtype': dtype
+                }
+            )
+        if not resp.ok:
+            raise ValueError(
+                f'There was an error running predict on the model: {resp.json()}')
+        else:
+            return resp.json()
+
     if predict_function == 'predict':
         try:
             if model_flavor == PYFUNC_FLAVOR:
@@ -145,8 +173,7 @@ def predict_model(
 def fload_model(
     model_name: str,
     model_flavor: str,
-    model_version: str | int | None = None,
-    model_alias: str | None = None,
+    model_version_or_alias: str | int | None = None,
     requirements: str | None = None,
     quantization_kwargs: dict | None = None,
     **kwargs
@@ -185,7 +212,7 @@ def fload_model(
     - MlflowException, when the model cannot be loaded
     """
 
-    if not (model_version or model_alias) and model_flavor != HUGGINGFACE_FLAVOR:
+    if not (model_version_or_alias) and model_flavor != HUGGINGFACE_FLAVOR:
         raise ValueError('Model version or model alias must be provided')
 
     if model_flavor not in ALLOWED_MODEL_FLAVORS:
@@ -196,10 +223,29 @@ def fload_model(
 
         # If the model is not a huggingface model, then format the model uri
         if model_flavor != HUGGINGFACE_FLAVOR:
-            if model_version:
-                model_uri = f'models:/{model_name}/{model_version}'
-            elif model_alias:
-                model_uri = f'models:/{model_name}@{model_alias}'
+
+            # Determine the model's URI using the mlflow.MlflowClient
+            mlflow_client = mlflow.MlflowClient()
+
+            # First try looking for the URI by alias
+            try:
+                model_uri = mlflow_client.get_model_version_by_alias(
+                    model_name,
+                    model_version_or_alias
+                ).source
+
+            # If that doesn't work, then load using the model version
+            except Exception:
+                try:
+                    model_uri = mlflow_client.get_model_version(
+                        model_name,
+                        model_version_or_alias
+                    ).source
+
+                # If an item does not appear in our records, then it does not exist
+                except Exception:
+                    raise mlflow.MlflowException(
+                        'Model with that name and either version or alias not found')
 
             # Install dependencies for the model from mlflow
             subprocess.run(
@@ -222,30 +268,8 @@ def fload_model(
                     ]
                 )
 
-        # Load the model if it is requested to be a pyfunc model
-        if model_flavor == PYFUNC_FLAVOR:
-            model = mlflow.pyfunc.load_model(model_uri)
-
-        # Load the model if it is requested to be a sklearn model
-        elif model_flavor == SKLEARN_FLAVOR:
-            model = mlflow.sklearn.load_model(model_uri)
-
-        # Load the model if it is requested to be a transformers model
-        elif model_flavor == TRANSFORMERS_FLAVOR:
-            if mlflow.transformers.is_gpu_available():
-                # NOTE: This loads the model to GPU automatically
-                # TODO: Change this so that it can be done more intelligently
-                model = mlflow.transformers.load_model(
-                    model_uri,
-                    kwargs={
-                        'device_map': 'auto'
-                    }
-                )
-            else:
-                model = mlflow.transformers.load_model(model_uri)
-
         # Load the model if it is a huggingface model
-        elif model_flavor == HUGGINGFACE_FLAVOR:
+        if model_flavor == HUGGINGFACE_FLAVOR:
             if quantization_kwargs:
                 bnb_config = BitsAndBytesConfig(**quantization_kwargs)
                 if not kwargs.get('model_kwargs'):
@@ -260,7 +284,7 @@ def fload_model(
         raise mlflow.MlflowException('Could not load model')
 
 
-# Function to load models from cache
+# Function to load the model cache file
 
 
 def load_models_from_cache():

@@ -1,4 +1,5 @@
 python-jose[cryptography]
+mlinsightlab==0.0.10
 fastapi[standard]
 uvicorn[standard]
 python-multipart
@@ -12,5 +13,6 @@ pydantic
 tf-keras
 mlflow
 psutil
+docker
 torch
 lz4
