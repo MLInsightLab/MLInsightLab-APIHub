@@ -1,21 +1,28 @@
+# External imports
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, HTTPException, Depends, Body, BackgroundTasks
 from datetime import datetime, timedelta, timezone
 from fastapi.responses import RedirectResponse
+from contextlib import asynccontextmanager
 from jose import JWTError, jwt
 import numpy as np
 import subprocess
 import secrets
+import mlflow
 import signal
 import string
 import json
 import os
 
+# Internal imports
 from db_utils import setup_database, validate_user_key, validate_user_password, fcreate_user, fdelete_user, fissue_new_api_key, fissue_new_password, fget_user_role, fupdate_user_role, flist_users
 from model_utils import load_models_from_cache, fload_model, predict_model, save_prediction, list_models_with_predictions, get_predictions
 from global_variables import SERVED_MODEL_CACHE_FILE, VARIABLE_STORE_FILE, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR
 from fs_utils import upload_data_to_fs, download_data_from_fs, list_fs_directory
 from templates import *
+
+# Imports from mlinsightlab package
+from mlinsightlab import ModelManager
 
 # Set up variables for JWT authentication
 SECRET_KEY = ''.join([secrets.choice(string.ascii_letters) for _ in range(32)])
@@ -29,6 +36,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 # Set up the database
 setup_database()
+
+# Instantiate the model manager
+manager = ModelManager(
+    model_image='ghcr.io/mlinsighttechnologies/mlinsightlab-model-container:main',
+    model_network='mlinsightlab_model_network',
+    mlflow_tracking_uri=MLFLOW_TRACKING_URI,
+    model_port='8888'
+)
 
 # Load the variable store
 try:
@@ -53,14 +68,47 @@ try:
         kwargs = model_info.get('kwargs')
 
         try:
-            model = fload_model(
-                model_name,
-                model_flavor,
-                model_version_or_alias,
-                requirements=requirements,
-                quantization_kwargs=quantization_kwargs,
-                **kwargs
-            )
+            if model_flavor != HUGGINGFACE_FLAVOR:
+
+                # Get the uri of the model
+                mlflow_client = mlflow.MlflowClient()
+                try:
+                    model_uri = mlflow_client.get_model_version_by_alias(
+                        model_name,
+                        model_version_or_alias
+                    ).source
+                except Exception:
+                    try:
+                        model_uri = mlflow_client.get_model_version(
+                            model_name,
+                            model_version_or_alias
+                        ).source
+                    except Exception:
+                        raise ValueError('Model not able to be loaded')
+
+                try:
+                    manager.deploy_model(
+                        model_uri=model_uri,
+                        model_name=model_name,
+                        model_flavor=model_flavor,
+                        model_version_or_alias=model_version_or_alias,
+                        use_gpu=mlflow.transformers.is_gpu_available()
+                    )
+                except Exception:
+                    raise ValueError('Model not able to be loaded')
+
+                model = manager.models[-1]
+
+            else:
+                model = fload_model(
+                    model_name,
+                    model_flavor,
+                    model_version_or_alias,
+                    requirements=requirements,
+                    quantization_kwargs=quantization_kwargs,
+                    **kwargs
+                )
+
             if not LOADED_MODELS.get(model_name):
                 LOADED_MODELS[model_name] = {
                     model_flavor: {
@@ -163,7 +211,6 @@ def save_models_to_cache():
 
 # Function to load a model in the background
 
-
 def load_model_background(
     model_name: str,
     model_flavor: str,
@@ -175,21 +222,46 @@ def load_model_background(
     """
     Load a model in the background
     """
-    try:
-        model = fload_model(
-            model_name,
-            model_flavor,
-            model_version=model_version_or_alias,
-            requirements=requirements,
-            quantization_kwargs=quantization_kwargs,
-            **kwargs
-        )
-    except Exception:
+
+    if model_flavor != HUGGINGFACE_FLAVOR:
+
+        # Get the uri of the model
+        mlflow_client = mlflow.MlflowClient()
+        try:
+            model_uri = mlflow_client.get_model_version_by_alias(
+                model_name,
+                model_version_or_alias
+            ).source
+        except Exception:
+            try:
+                model_uri = mlflow_client.get_model_version(
+                    model_name,
+                    model_version_or_alias
+                ).source
+            except Exception:
+                raise ValueError('Model not able to be loaded')
+
+        # Now that we have the model URI, load the model using the ModelManager
+        try:
+            manager.deploy_model(
+                model_uri=model_uri,
+                model_name=model_name,
+                model_flavor=model_flavor,
+                model_version_or_alias=model_version_or_alias,
+                use_gpu=mlflow.transformers.is_gpu_available()
+            )
+        except Exception:
+            raise ValueError('Model not able to be loaded')
+
+        # Get the model as the last model in the model manager
+        model = manager.models[-1]
+
+    else:
         try:
             model = fload_model(
                 model_name,
                 model_flavor,
-                model_alias=model_version_or_alias,
+                model_version_or_alias=model_version_or_alias,
                 requirements=requirements,
                 quantization_kwargs=quantization_kwargs,
                 **kwargs
@@ -241,9 +313,19 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+# Lifespan to manage startup and shutdown procedures
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Nothing necessary on startup
+    yield
+
+    # Remove all models held by the manager
+    manager.remove_all_models()
 
 # Initialize the app and Basic Auth
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 security = HTTPBasic(auto_error=False)
 
 # Function to verify user credentials
@@ -482,6 +564,12 @@ def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str
         )
 
     try:
+        if model_flavor != HUGGINGFACE_FLAVOR:
+            manager.remove_deployed_model(
+                model_name=model_name,
+                model_flavor=model_flavor,
+                model_version_or_alias=model_version_or_alias
+            )
         del LOADED_MODELS[model_name][model_flavor][model_version_or_alias]
 
         save_models_to_cache()
