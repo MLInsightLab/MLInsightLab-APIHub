@@ -40,7 +40,7 @@ setup_database()
 # Instantiate the model manager
 manager = ModelManager(
     model_image='ghcr.io/mlinsighttechnologies/mlinsightlab-model-container:main',
-    model_network='mlinsightlab_model_network',
+    model_network=os.getenv('MODEL_NETWORK') if os.getenv('MODEL_NETWORK') else 'mlinsightlab_model_network',
     mlflow_tracking_uri=MLFLOW_TRACKING_URI,
     model_port='8888'
 )
