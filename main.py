@@ -901,6 +901,24 @@ def reset(user_properties: dict = Depends(verify_credentials_or_token)):
         'success': True
     }
 
+@app.get('/restart-jupyter')
+def restart_jupyter(user_properties: dict = Depends(verify_credentials_or_token)):
+    """
+    Restart the jupyter service
+    """
+    if user_properties['role'] != 'admin':
+        raise HTTPException(
+            403,
+            'User does not have permissions'
+        )
+    try:
+        manager.docker_client.containers.get('mlinsightlab-jupyter-1').restart()
+    except Exception as e:
+        raise HTTPException(500, f'The following error occurred: {str(e)}')
+    return {
+        'success' : True
+    }
+
 
 @app.get('/system/resource-usage')
 def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
