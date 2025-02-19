@@ -26,13 +26,14 @@ from mlinsightlab import ModelManager
 
 # Set up variables for JWT authentication
 SECRET_KEY = ''.join([secrets.choice(string.ascii_letters) for _ in range(32)])
-ALGORITHM = "HS256"
+ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # The MLFlow tracking uri
 MLFLOW_TRACKING_URI = os.environ['MLFLOW_TRACKING_URI']
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+# Set up the OAuth2 schema
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token', auto_error=False)
 
 # Set up the database
 setup_database()
@@ -40,12 +41,13 @@ setup_database()
 # Instantiate the model manager
 manager = ModelManager(
     model_image='ghcr.io/mlinsightlab/mlinsightlab-model-container:main',
-    model_network=os.getenv('MODEL_NETWORK') if os.getenv('MODEL_NETWORK') else 'mlinsightlab_model_network',
+    model_network=os.getenv('MODEL_NETWORK') if os.getenv(
+        'MODEL_NETWORK') else 'mlinsightlab_model_network',
     mlflow_tracking_uri=MLFLOW_TRACKING_URI,
     model_port='8888'
 )
 
-# Load the variable store
+# Load the variable store. If the file doesn't exist, set to empty
 try:
     with open(VARIABLE_STORE_FILE, 'r') as f:
         variable_store = json.load(f)
@@ -55,9 +57,12 @@ except Exception:
 
 # Load all models from cache
 try:
+
+    # Get the cache of models that should be loaded, then start loading the models from the cache
     models_to_load = load_models_from_cache()
     LOADED_MODELS = {}
 
+    # Load the models individually
     for model_info in models_to_load:
         model_name = model_info['model_name']
         model_flavor = model_info['model_flavor']
@@ -68,9 +73,11 @@ try:
         kwargs = model_info.get('kwargs')
 
         try:
+
+            # Only huggingface models are the ones that aren't loaded using the ModelManager (for now)
             if model_flavor != HUGGINGFACE_FLAVOR:
 
-                # Get the uri of the model
+                # Get the uri of the model - first try using alias notation ('@'), then try using version notation ('/')
                 mlflow_client = mlflow.MlflowClient()
                 try:
                     model_source = mlflow_client.get_model_version_by_alias(
@@ -103,6 +110,7 @@ try:
 
                 model = manager.models[-1]
 
+            # Huggingface models are the only ones that are loaded directly
             else:
                 model = fload_model(
                     model_name,
@@ -113,6 +121,7 @@ try:
                     **kwargs
                 )
 
+            # Set up the loaded model in model directory, creating keys as necessary to do so
             if not LOADED_MODELS.get(model_name):
                 LOADED_MODELS[model_name] = {
                     model_flavor: {
@@ -181,15 +190,16 @@ try:
             except Exception:
                 raise ValueError('Model not able to be loaded')
 
+# If there's an error loading models from the get-go, clear all models
 except Exception:
     LOADED_MODELS = {}
 
 
 # Function to save models to cache
 def save_models_to_cache():
-    """
+    '''
     Save models to the cache directory
-    """
+    '''
     to_save = []
     if LOADED_MODELS != {}:
         for model_name in LOADED_MODELS.keys():
@@ -223,9 +233,9 @@ def load_model_background(
     quantization_kwargs: dict | None,
     **kwargs
 ):
-    """
+    '''
     Load a model in the background
-    """
+    '''
 
     if model_flavor != HUGGINGFACE_FLAVOR:
 
@@ -310,15 +320,22 @@ def load_model_background(
     return True
 
 
+# Function to create an access token
 def create_access_token(data: dict, expires_delta: timedelta = None):
+    '''
+    Create an access token for a user
+    '''
+
     to_encode = data.copy()
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + \
             timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({'exp': expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
     return encoded_jwt
 
 # Lifespan to manage startup and shutdown procedures
@@ -329,7 +346,7 @@ async def lifespan(app: FastAPI):
     # Nothing necessary on startup
     yield
 
-    # Remove all models held by the manager
+    # Remove all models held by the manager on shutdown
     manager.remove_all_models()
 
 # Initialize the app and Basic Auth
@@ -340,9 +357,9 @@ security = HTTPBasic(auto_error=False)
 
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    """
+    '''
     Verify a user's API key credentials
-    """
+    '''
     if not credentials:
         return None
     try:
@@ -364,9 +381,9 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
 
 
 def verify_credentials_password(credentials: HTTPBasicCredentials = Depends(security)):
-    """
+    '''
     Verify a user's Username/Password credentials
-    """
+    '''
     try:
         role = validate_user_password(
             credentials.username,
@@ -384,21 +401,24 @@ def verify_credentials_password(credentials: HTTPBasicCredentials = Depends(secu
 
 
 def verify_jwt_token(token: str = Depends(oauth2_scheme)):
+    '''
+    Verify a JWT token
+    '''
     if not token:
         return None
 
     credentials_exception = HTTPException(
         status_code=401,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+        detail='Could not validate credentials',
+        headers={'WWW-Authenticate': 'Bearer'},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        role: str = payload.get("role")
+        username: str = payload.get('sub')
+        role: str = payload.get('role')
         if username is None or role is None:
             raise credentials_exception
-        return {"username": username, "role": role}
+        return {'username': username, 'role': role}
     except JWTError:
         raise credentials_exception
 
@@ -407,9 +427,9 @@ def verify_credentials_or_token(
     api_key: HTTPBasicCredentials = Depends(security),
     token: str = Depends(oauth2_scheme),
 ):
-    """
+    '''
     Verify either API Key (Basic Auth) or JWT token.
-    """
+    '''
     if api_key and (api_key.username and api_key.password):
         # If API key credentials are provided
         return verify_credentials(api_key)
@@ -419,25 +439,28 @@ def verify_credentials_or_token(
     else:
         raise HTTPException(
             status_code=401,
-            detail="No credentials provided"
+            detail='No credentials provided'
         )
 
 
-@app.post("/token")
+@app.post('/token')
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    '''
+    Login for an access token
+    '''
     user = validate_user_password(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
-            status_code=401, detail="Incorrect username or password"
+            status_code=401, detail='Incorrect username or password'
         )
 
     # Create JWT token with user details
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": form_data.username, "role": user},
+        data={'sub': form_data.username, 'role': user},
         expires_delta=access_token_expires,
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {'access_token': access_token, 'token_type': 'bearer'}
 
 # Verify a user's password
 
@@ -445,7 +468,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.post('/password/verify')
 # , user_properties: dict = Depends(verify_credentials_or_token)):
 def verify_password(body: VerifyPasswordInfo):
-    """
+    '''
     Verify a password
 
     Parameters
@@ -454,7 +477,7 @@ def verify_password(body: VerifyPasswordInfo):
         The user's username
     password : str
         The user's password
-    """
+    '''
 
     try:
         role = validate_user_password(body.username, body.password)
@@ -467,15 +490,17 @@ def verify_password(body: VerifyPasswordInfo):
 
 @app.get('/', include_in_schema=False)
 def redirect_docs():
-    """
+    '''
     Redirect the main page to the docs site
-    """
+    '''
     return RedirectResponse(url='/api/docs')
+
+# Load model endpoint
 
 
 @app.post('/models/load/{model_name}/{model_flavor}/{model_version_or_alias}')
 def load_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Load a model into local memory
 
     Parameters
@@ -488,7 +513,7 @@ def load_model(model_name: str, model_flavor: str, model_version_or_alias: str |
         The version or alias of the model
     body : LoadRequest
         Additional parameters to load the model
-    """
+    '''
 
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
@@ -525,9 +550,9 @@ def load_model(model_name: str, model_flavor: str, model_version_or_alias: str |
 
 @app.get('/models/list')
 def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     List loaded models
-    """
+    '''
     try:
         if LOADED_MODELS == {}:
             return []
@@ -552,7 +577,7 @@ def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
 
 @app.delete('/models/unload/{model_name}/{model_flavor}/{model_version_or_alias}')
 def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Unload a model from memory
 
     Parameters
@@ -563,7 +588,7 @@ def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str
         The flavor of the model
     model_version_or_alias : str or int
         The version or alias of the model
-    """
+    '''
 
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
@@ -593,7 +618,7 @@ def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str
 
 @app.post('/models/predict/{model_name}/{model_flavor}/{model_version_or_alias}')
 def predict(model_name: str, model_flavor: str, model_version_or_alias: str | int, body: PredictRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Run prediction
 
     Parameters
@@ -604,7 +629,7 @@ def predict(model_name: str, model_flavor: str, model_version_or_alias: str | in
         The flavor of the model
     model_version_or_alias : str or int
         The version or alias of the model
-    """
+    '''
 
     # Try to load the model, assuming it has already been loaded
     try:
@@ -653,9 +678,14 @@ def predict(model_name: str, model_flavor: str, model_version_or_alias: str | in
     except Exception as e:
         raise HTTPException(400, str(e))
 
+# List models with logged predictions
+
 
 @app.get('/predictions/models')
 def list_predicted_models(user_properties: dict = Depends(verify_credentials_or_token)):
+    '''
+    List models with logged predictions
+    '''
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
             403,
@@ -671,10 +701,12 @@ def list_predicted_models(user_properties: dict = Depends(verify_credentials_or_
             f'The following error occurred: {str(e)}'
         )
 
+# Get predictions from a single model
+
 
 @app.get('/predictions/{model_name}/{model_flavor}/{model_version_or_alias}')
 def predictions(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Retrieve predictions made from a model
 
     Parameters
@@ -685,7 +717,7 @@ def predictions(model_name: str, model_flavor: str, model_version_or_alias: str 
         The flavor of the model
     model_version_or_alias : str | int
         The version or alias of the model
-    """
+    '''
 
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
@@ -712,14 +744,14 @@ def predictions(model_name: str, model_flavor: str, model_version_or_alias: str 
 
 @app.post('/users/create')
 def create_user(user_info: UserInfo, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Create a user
 
     Parameters
     ----------
     user_info : UserInfo
         Properties of the user
-    """
+    '''
     if user_properties['role'] != 'admin':
         raise HTTPException(
             403,
@@ -741,14 +773,14 @@ def create_user(user_info: UserInfo, user_properties: dict = Depends(verify_cred
 
 @app.delete('/users/delete/{username}')
 def delete_user(username, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Delete a user
 
     Parameters
     ----------
     username : str
         The username of the user to delete
-    """
+    '''
     if user_properties['role'] != 'admin':
         raise HTTPException(
             403,
@@ -767,14 +799,14 @@ def delete_user(username, user_properties: dict = Depends(verify_credentials_or_
 
 @app.put('/users/api_key/issue/{username}')
 def issue_new_api_key(username, user_properties: dict = Depends(verify_credentials_password)):
-    """
+    '''
     Issue a new API key for a user
 
     Parameters
     ----------
     username : str
         The username of the user
-    """
+    '''
     if user_properties['role'] != 'admin' and username != user_properties['username']:
         raise HTTPException(
             403,
@@ -796,7 +828,7 @@ def issue_new_api_key(username, user_properties: dict = Depends(verify_credentia
 
 @app.put('/users/password/issue/{username}')
 def issue_new_password(username, new_password: str = Body(embed=True), user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Issue a new password for a user
 
     Parameters
@@ -805,7 +837,7 @@ def issue_new_password(username, new_password: str = Body(embed=True), user_prop
         The username of the user
     new_password : str
         The new password for the user
-    """
+    '''
     if user_properties['role'] != 'admin' or username != user_properties['username']:
         raise HTTPException(
             403,
@@ -828,14 +860,14 @@ def issue_new_password(username, new_password: str = Body(embed=True), user_prop
 
 @app.get('/users/role/{username}')
 def get_user_role(username: str):
-    """
+    '''
     Get a user's role
 
     Parameters
     ----------
     username : str
         The username of the user
-    """
+    '''
     try:
         return fget_user_role(username)
     except Exception:
@@ -846,7 +878,7 @@ def get_user_role(username: str):
 
 @app.put('/users/role/{username}')
 def update_user_role(username: str, new_role=Body(embed=True), user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Update a user's role
 
     Parameters
@@ -855,7 +887,7 @@ def update_user_role(username: str, new_role=Body(embed=True), user_properties: 
         The username for the user
     new_role : str
         The new role for the user
-    """
+    '''
     if user_properties['role'] != 'admin':
         raise HTTPException(
             403,
@@ -875,9 +907,9 @@ def update_user_role(username: str, new_role=Body(embed=True), user_properties: 
 
 @app.get('/users/list')
 def list_users(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     List all users
-    """
+    '''
 
     try:
         return flist_users()
@@ -887,9 +919,9 @@ def list_users(user_properties: dict = Depends(verify_credentials_or_token)):
 
 @app.get('/reset')
 def reset(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Reset the API, redeploying all models
-    """
+    '''
     if user_properties['role'] != 'admin':
         raise HTTPException(
             403,
@@ -901,30 +933,34 @@ def reset(user_properties: dict = Depends(verify_credentials_or_token)):
         'success': True
     }
 
+
+# Restart the jupyter service
 @app.get('/restart-jupyter')
 def restart_jupyter(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Restart the jupyter service
-    """
+    '''
     if user_properties['role'] != 'admin':
         raise HTTPException(
             403,
             'User does not have permissions'
         )
     try:
-        manager.docker_client.containers.get('mlinsightlab-jupyter-1').restart()
+        manager.docker_client.containers.get(
+            'mlinsightlab-jupyter-1').restart()
     except Exception as e:
         raise HTTPException(500, f'The following error occurred: {str(e)}')
     return {
-        'success' : True
+        'success': True
     }
 
 
+# Get system resource usage
 @app.get('/system/resource-usage')
 def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Get system resource usage, in terms of free CPU and GPU memory (if GPU-enabled)
-    """
+    '''
 
     if user_properties['role'] != 'admin':
         raise HTTPException(
@@ -954,10 +990,12 @@ def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
         'gpu_memory_usage': gpu_memory_output
     }
 
+# Upload data to the data store
+
 
 @app.post('/data/upload')
 def upload_file(body: DataUploadRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Upload a file to the data store
 
     Parameters
@@ -969,7 +1007,7 @@ def upload_file(body: DataUploadRequest, user_properties: dict = Depends(verify_
     -------
     filename : str
         The full path to the file on disk, in the data directory
-    """
+    '''
 
     try:
         filename = upload_data_to_fs(
@@ -984,10 +1022,12 @@ def upload_file(body: DataUploadRequest, user_properties: dict = Depends(verify_
             f'The following error occurred: {str(e)}'
         )
 
+# Download data from the data store
+
 
 @app.post('/data/download')
 def download_file(body: DataDownloadRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Download a file from the data drive
 
     Parameters
@@ -999,7 +1039,7 @@ def download_file(body: DataDownloadRequest, user_properties: dict = Depends(ver
     -------
     content : str
         The content of the file, as a string
-    """
+    '''
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
             403,
@@ -1019,9 +1059,10 @@ def download_file(body: DataDownloadRequest, user_properties: dict = Depends(ver
         )
 
 
+# List data in the data store
 @app.post('/data/list')
 def list_files(body: DataListRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     List data files within a directory in the data store
 
     Parameters
@@ -1033,7 +1074,7 @@ def list_files(body: DataListRequest, user_properties: dict = Depends(verify_cre
     -------
     files : str
         The files and directories within the directory
-    """
+    '''
 
     try:
         return list_fs_directory(body.directory)
@@ -1043,17 +1084,19 @@ def list_files(body: DataListRequest, user_properties: dict = Depends(verify_cre
             f'The following error occurred: {str(e)}'
         )
 
+# Get a variable from the variable store
+
 
 @app.get('/variable-store/get/{variable_name}')
 def get_variable(variable_name: str, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Retrieve a variable from the variable store
 
     Parameters
     ----------
     variable_name : str
         The name of the variable
-    """
+    '''
 
     username = user_properties['username']
 
@@ -1065,12 +1108,14 @@ def get_variable(variable_name: str, user_properties: dict = Depends(verify_cred
             'User does not have a variable with that identifier saved'
         )
 
+# List variables in the variable store
+
 
 @app.get('/variable-store/list')
 def list_variables(user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     List Variables
-    """
+    '''
 
     username = user_properties['username']
 
@@ -1082,10 +1127,12 @@ def list_variables(user_properties: dict = Depends(verify_credentials_or_token))
     except Exception:
         return []
 
+# Set a variable in the variable store
+
 
 @app.post('/variable-store/set')
 def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Set a variable
 
     Parameters:
@@ -1093,7 +1140,7 @@ def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verif
         The variable identifier
     variable_properties : VariableSetRequest
         JSON payload with the value for the variable and whether to overwrite the variable if it is already set
-    """
+    '''
 
     username = user_properties['username']
 
@@ -1128,17 +1175,19 @@ def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verif
         'success': True
     }
 
+# Delete a variable in the variable store
+
 
 @app.delete('/variable-store/delete/{variable_name}')
 def delete_variable(variable_name: str, user_properties: dict = Depends(verify_credentials_or_token)):
-    """
+    '''
     Delete a variable
 
     Parameters
     ----------
     variable_name : str
         The name of the variable
-    """
+    '''
 
     username = user_properties['username']
 

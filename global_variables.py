@@ -8,6 +8,8 @@ ALLOWED_MODEL_FLAVORS = [
     'transformers',
     'hfhub'
 ]
+
+# Flavors broken out
 PYFUNC_FLAVOR = ALLOWED_MODEL_FLAVORS[0]
 SKLEARN_FLAVOR = ALLOWED_MODEL_FLAVORS[1]
 TRANSFORMERS_FLAVOR = ALLOWED_MODEL_FLAVORS[2]
@@ -26,9 +28,11 @@ DATA_DIRECTORY = os.environ['DATA_DIRECTORY']
 # Location to store predictions
 PREDICTIONS_DIR = os.environ['PREDICTIONS_CACHE_DIR']
 
+# Variable store locations
 VARIABLE_STORE_DIRECTORY = os.environ['VARIABLE_STORE_DIRECTORY']
 VARIABLE_STORE_FILE = os.path.join(
-    VARIABLE_STORE_DIRECTORY, 'variable_store.json')
+    VARIABLE_STORE_DIRECTORY, 'variable_store.json'
+)
 
 # Database location
 DB_DIRECTORY = '/database'

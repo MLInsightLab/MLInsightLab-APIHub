@@ -9,9 +9,9 @@ import os
 
 
 def generate_api_key():
-    """
+    '''
     Generate an API key
-    """
+    '''
     key = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
     return f'mlil-{key}'
 
@@ -31,9 +31,9 @@ def password_meets_requirements(password):
 
 
 def generate_password():
-    """
+    '''
     Generates a password
-    """
+    '''
     password = ''
     while not password_meets_requirements(password):
         password = ''.join(random.choices(
@@ -52,11 +52,11 @@ def validate_role(role):
 
 
 def setup_database():
-    """
+    '''
     Set up the database if it doesn't already exist
 
     NOTE: Can be run safely even if the database has already been created
-    """
+    '''
 
     # Create the users table if it does not already exist
     con = sqlite3.connect(DB_FILE)
@@ -83,13 +83,13 @@ def setup_database():
 
 
 def validate_user_key(username, key):
-    """
+    '''
     Validate a username, key combination
 
     If successful, returns the user's role
 
     If unsuccessful, raises an appropriate Exception
-    """
+    '''
 
     # Query the database for the user's information
     con = sqlite3.connect(DB_FILE)
@@ -118,13 +118,13 @@ def validate_user_key(username, key):
 
 
 def validate_user_password(username, password):
-    """
+    '''
     Validate a username, password combination
 
     If successful, returns the user's role
 
     If unsuccessful, raises an appropriate Exception
-    """
+    '''
 
     # Query the database for the user's information
     con = sqlite3.connect(DB_FILE)
@@ -153,13 +153,13 @@ def validate_user_password(username, password):
 
 
 def fcreate_user(username, role, api_key=None, password=None):
-    """
+    '''
     Create a new user with an assigned role and (optionally) with an API key and password
 
     If successful, returns the user's API key
 
     NOTE: If user with the specified username already exists, raises ValueError
-    """
+    '''
 
     # Establish connection to the database and check for the username already existing
     con = sqlite3.connect(DB_FILE)
@@ -198,9 +198,9 @@ def fcreate_user(username, role, api_key=None, password=None):
 
 
 def fdelete_user(username):
-    """
+    '''
     Delete a user from the database
-    """
+    '''
 
     # Connect to the database
     con = sqlite3.connect(DB_FILE)
@@ -214,11 +214,11 @@ def fdelete_user(username):
 
 
 def fissue_new_api_key(username, key=None):
-    """
+    '''
     Issue a new API key for a specified user
 
     NOTE: Raises ValueError if zero or more than one user exists with the username
-    """
+    '''
 
     # Connect to the database and ensure that the user already exists
     con = sqlite3.connect(DB_FILE)
@@ -251,12 +251,12 @@ def fissue_new_api_key(username, key=None):
 
 
 def fissue_new_password(username, password=None):
-    """
+    '''
     Issue a new password for a specified user
 
     NOTE: Raises ValueError if zero or more than one user exists with the username
     NOTE: Raises ValueError if password does not meet minimum length requirements or does not contain at least one uppercase and one lowercase letter
-    """
+    '''
 
     # Connect to the database and ensure that the user already exists
     con = sqlite3.connect(DB_FILE)
@@ -292,9 +292,9 @@ def fissue_new_password(username, password=None):
 
 
 def fget_user_role(username):
-    """
+    '''
     Get a user's role
-    """
+    '''
 
     # Connect to the database and ensure the user already exists
     con = sqlite3.connect(DB_FILE)
@@ -316,9 +316,9 @@ def fget_user_role(username):
 
 
 def fupdate_user_role(username, new_role):
-    """
+    '''
     Change a user's role
-    """
+    '''
 
     # Connect to the database and ensure that the user already exists
     con = sqlite3.connect(DB_FILE)
@@ -346,9 +346,9 @@ def fupdate_user_role(username, new_role):
 
 
 def flist_users():
-    """
+    '''
     List all of the users in the database
-    """
+    '''
 
     # Connect to the database
     con = sqlite3.connect(DB_FILE)

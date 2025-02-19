@@ -36,14 +36,14 @@ def save_prediction(
 
     return True
 
-# List models in the predictions directory
+# List models with predictions in the predictions directory
 
 
 def list_models_with_predictions():
     model_dirs = glob(f'{PREDICTIONS_DIR}/*/*/*')
     return [d.split('/')[2:] for d in model_dirs]
 
-# Get saved predictions
+# Get saved predictions for a specific model
 
 
 def get_predictions(
@@ -76,7 +76,7 @@ def predict_model(
     params: dict,
     dtype: str = None
 ):
-    f"""
+    f'''
     Make predictions with a model
 
     Parameters
@@ -91,7 +91,7 @@ def predict_model(
         The predict function to run, must be one of {ALLOWED_PREDICT_FUNCTIONS}
     params : dict
         Parameters to run prediction with
-    """
+    '''
 
     if isinstance(model, dict):
         container_name = model['container_name']
@@ -178,7 +178,7 @@ def fload_model(
     quantization_kwargs: dict | None = None,
     **kwargs
 ):
-    f"""
+    f'''
     Load a model from the MLFlow server
 
     Parameters
@@ -210,14 +210,14 @@ def fload_model(
     Raises
     ------
     - MlflowException, when the model cannot be loaded
-    """
+    '''
 
     if not (model_version_or_alias) and model_flavor != HUGGINGFACE_FLAVOR:
         raise ValueError('Model version or model alias must be provided')
 
     if model_flavor not in ALLOWED_MODEL_FLAVORS:
         raise ValueError(
-            f'Only "pyfunc", "sklearn", "transformers", and "hfhub" model flavors supported, got {model_flavor}')
+            f'Only {ALLOWED_MODEL_FLAVORS} model flavors supported, got {model_flavor}')
 
     try:
 
@@ -288,9 +288,9 @@ def fload_model(
 
 
 def load_models_from_cache():
-    """
+    '''
     Load models from the cache directory
-    """
+    '''
     try:
         with open(SERVED_MODEL_CACHE_FILE, 'r') as f:
             return json.load(f)

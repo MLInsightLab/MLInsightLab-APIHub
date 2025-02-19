@@ -11,7 +11,7 @@ def upload_data_to_fs(
         file_bytes: str,
         overwrite: bool = False
 ):
-    """
+    '''
     Upload data to the data store
 
     Parameters:
@@ -27,7 +27,7 @@ def upload_data_to_fs(
     -------
     filename : str
         The final filename of the file, on disk
-    """
+    '''
 
     # Ensure that the data directory leads
     if not filename.startswith(DATA_DIRECTORY):
@@ -51,12 +51,15 @@ def upload_data_to_fs(
         file_bytes.encode('utf-8')
     )
 
+    # Opener as wrapper function to write file
     def opener(path, flags):
         return os.open(path, flags, 0o776)
 
+    # Write the file
     with open(filename, 'wb', opener=opener) as f:
         f.write(file_content)
 
+    # change the group of the file so that all mlil users in Jupyter can use the file
     check_call(
         ['chgrp', 'mlil', filename]
     )
@@ -69,7 +72,7 @@ def upload_data_to_fs(
 def download_data_from_fs(
         filename: str
 ):
-    """
+    '''
     Download a file from the file system
 
     Parameters
@@ -81,16 +84,20 @@ def download_data_from_fs(
     -------
     content : str
         The content of the file, as a string
-    """
+    '''
+
+    # Get the correct name of the file
     if not filename.startswith(DATA_DIRECTORY):
         filename = os.path.join(
             DATA_DIRECTORY,
             filename.lstrip('/').strip()
         )
 
+    # Check that file exists
     if not os.path.exists(filename):
         raise FileNotFoundError('File does not exist')
 
+    # Read the file and return the encoded contents
     with open(filename, 'rb') as f:
         content = f.read()
     content = base64.b64encode(content).decode('utf-8')
@@ -101,7 +108,7 @@ def download_data_from_fs(
 
 
 def list_fs_directory(dirname: str = None) -> list[str]:
-    """
+    '''
     List the contents of a directory in the file store
 
     Parameters
@@ -113,7 +120,7 @@ def list_fs_directory(dirname: str = None) -> list[str]:
     -------
     files : list[str]
         The files in that directory
-    """
+    '''
 
     if dirname is None:
         dirname = DATA_DIRECTORY
