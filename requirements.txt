@@ -1,5 +1,5 @@
 python-jose[cryptography]
-mlinsightlab==0.0.12
+mlinsightlab==0.0.13
 fastapi[standard]
 uvicorn[standard]
 python-multipart
