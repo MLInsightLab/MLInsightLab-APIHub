@@ -2,6 +2,9 @@ from pydantic import BaseModel
 
 
 class PredictRequest(BaseModel):
+    model_name: str
+    model_flavor: str
+    model_version_or_alias: str | int
     data: list
     predict_function: str = 'predict'
     dtype: str = None
@@ -10,6 +13,9 @@ class PredictRequest(BaseModel):
 
 
 class LoadRequest(BaseModel):
+    model_name: str
+    model_flavor: str
+    model_version_or_alias: str | int
     requirements: str | None = None
     quantization_kwargs: dict | None = None
     kwargs: dict | None = None

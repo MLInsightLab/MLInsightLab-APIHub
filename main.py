@@ -498,19 +498,13 @@ def redirect_docs():
 # Load model endpoint
 
 
-@app.post('/models/load/{model_name}/{model_flavor}/{model_version_or_alias}')
-def load_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
+@app.post('/models/load')
+def load_model(body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
-    Load a model into local memory
+    Load and deploy a model
 
     Parameters
     ----------
-    model_name : str
-        The name of the model
-    model_flavor : str
-        The flavor of the model
-    model_version_or_alias : str or int
-        The version or alias of the model
     body : LoadRequest
         Additional parameters to load the model
     '''
@@ -524,9 +518,9 @@ def load_model(model_name: str, model_flavor: str, model_version_or_alias: str |
     try:
         background_tasks.add_task(
             load_model_background,
-            model_name,
-            model_flavor,
-            model_version_or_alias,
+            body.model_name,
+            body.model_flavor,
+            body.model_version_or_alias,
             body.requirements,
             body.quantization_kwargs,
             **body.kwargs
@@ -534,9 +528,9 @@ def load_model(model_name: str, model_flavor: str, model_version_or_alias: str |
     except Exception:
         background_tasks.add_task(
             load_model_background,
-            model_name,
-            model_flavor,
-            model_version_or_alias,
+            body.model_name,
+            body.model_flavor,
+            body.model_version_or_alias,
             body.requirements,
             body.quantization_kwargs
         )
@@ -616,20 +610,15 @@ def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str
 # Predict using a model version or alias
 
 
-@app.post('/models/predict/{model_name}/{model_flavor}/{model_version_or_alias}')
-def predict(model_name: str, model_flavor: str, model_version_or_alias: str | int, body: PredictRequest, user_properties: dict = Depends(verify_credentials_or_token)):
+@app.post('/models/predict')
+def predict(body: PredictRequest, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Run prediction
-
-    Parameters
-    ----------
-    model_name : str
-        The name of the model
-    model_flavor : str
-        The flavor of the model
-    model_version_or_alias : str or int
-        The version or alias of the model
     '''
+
+    model_name = body.model_name
+    model_flavor = body.model_flavor
+    model_version_or_alias = body.model_version_or_alias
 
     # Try to load the model, assuming it has already been loaded
     try:
