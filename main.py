@@ -32,6 +32,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # The MLFlow tracking uri
 MLFLOW_TRACKING_URI = os.environ['MLFLOW_TRACKING_URI']
 
+# Data mount
+DATA_VOLUME_MOUNT = os.getenv('DATA_VOLUME_MOUNT', 'mlinsightlab_data')
+
 # Set up the OAuth2 schema
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token', auto_error=False)
 
@@ -103,7 +106,9 @@ try:
                         model_name=model_name,
                         model_flavor=model_flavor,
                         model_version_or_alias=model_version_or_alias,
-                        use_gpu=mlflow.transformers.is_gpu_available()
+                        use_gpu=mlflow.transformers.is_gpu_available(),
+                        volumes={DATA_VOLUME_MOUNT: {
+                            'bind': '/data', 'mode': 'rw'}}
                     )
                 except Exception:
                     raise ValueError('Model not able to be loaded')
@@ -266,7 +271,8 @@ def load_model_background(
                 model_name=model_name,
                 model_flavor=model_flavor,
                 model_version_or_alias=model_version_or_alias,
-                use_gpu=mlflow.transformers.is_gpu_available()
+                use_gpu=mlflow.transformers.is_gpu_available(),
+                volumes={DATA_VOLUME_MOUNT: {'bind': '/data', 'mode': 'rw'}}
             )
         except Exception:
             raise ValueError('Model not able to be loaded')
