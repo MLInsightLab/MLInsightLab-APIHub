@@ -18,10 +18,12 @@ HUGGINGFACE_FLAVOR = ALLOWED_MODEL_FLAVORS[3]
 # Global variables for prediction functions
 ALLOWED_PREDICT_FUNCTIONS = [
     'predict',
-    'predict_proba'
+    'predict_proba',
+    'transform'
 ]
 PREDICT = ALLOWED_PREDICT_FUNCTIONS[0]
 PREDICT_PROBA = ALLOWED_PREDICT_FUNCTIONS[1]
+TRANSFORM = ALLOWED_PREDICT_FUNCTIONS[2]
 
 DATA_DIRECTORY = os.environ['DATA_DIRECTORY']
 

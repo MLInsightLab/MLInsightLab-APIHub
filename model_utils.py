@@ -156,9 +156,18 @@ def predict_model(
             except Exception:
                 raise ValueError('There was an issue running `predict_proba`')
 
+    elif predict_function == 'transform':
+        try:
+            results = model.transform(to_predict)
+        except Exception:
+            try:
+                results = model.transform(to_predict.reshape(-1, 1))
+            except Exception:
+                raise ValueError('There was an issue running `transform`')
+
     else:
         raise ValueError(
-            'Only `predict` and `predict_proba` are supported predict functions')
+            'Only `predict`, `predict_proba`, and `transform` are supported predict functions')
 
     if isinstance(results, np.ndarray):
         results = results.tolist()
