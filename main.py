@@ -472,7 +472,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 
 @app.post('/password/verify')
-# , user_properties: dict = Depends(verify_credentials_or_token)):
 def verify_password(body: VerifyPasswordInfo):
     '''
     Verify a password
