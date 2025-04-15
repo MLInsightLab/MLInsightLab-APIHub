@@ -643,6 +643,8 @@ def predict(body: PredictRequest, user_properties: dict = Depends(verify_credent
                 to_predict = to_predict.astype(body.dtype)
         else:
             to_predict = body.data
+            if not isinstance(to_predict, list):
+                to_predict = [to_predict]
     except Exception:
         raise HTTPException(
             400,
