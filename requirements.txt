@@ -1,8 +1,8 @@
 python-jose[cryptography]
-mlinsightlab==0.0.19
 fastapi[standard]
 uvicorn[standard]
 python-multipart
+mlinsightlab
 transformers
 bitsandbytes
 torchvision
