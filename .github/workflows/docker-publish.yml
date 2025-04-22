@@ -67,11 +67,13 @@ jobs:
 
       - name: Scan image with Trivy
         if: github.event_name != 'pull_request'
-        run: |
-          echo "${{ steps.meta.outputs.tags }}" | while read -r tag; do
-            echo "Scanning image: $tag"
-            trivy image --exit-code 0 --format table --ignore-unfixed --severity CRITICAL,HIGH "$tag" >> trivy-report.txt || true
-          done
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: 'table'
+          output: trivy-report.txt
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
 
       - name: Upload Trivy Scan Report
         if: github.event_name != 'pull_request'
