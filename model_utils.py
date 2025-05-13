@@ -1,14 +1,24 @@
 from global_variables import PREDICTIONS_DIR, ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, ALLOWED_PREDICT_FUNCTIONS, SERVED_MODEL_CACHE_FILE
 from transformers import pipeline, BitsAndBytesConfig
 from templates import PredictRequest
+from io import BytesIO
 from glob import glob
 import datetime as dt
 import numpy as np
 import subprocess
 import requests
 import mlflow
+import boto3
 import json
 import os
+
+# S3 storage client
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+    endpoint_url=os.environ['S3_ENDPOINT_URL']
+)
 
 # Save prediction
 
@@ -22,17 +32,18 @@ def save_prediction(
     username: str
 ):
     prediction_file_path = os.path.join(
-        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias, str(dt.datetime.now()))
+        model_name, model_flavor, model_version_or_alias, str(dt.datetime.now()))
     prediction_data = {
         'input': body.model_dump(),
         'prediction': prediction,
         'username': username
     }
-    if not os.path.exists(os.path.dirname(prediction_file_path)):
-        os.makedirs(os.path.dirname(prediction_file_path))
 
-    with open(prediction_file_path, 'w') as f:
-        json.dump(prediction_data, f)
+    s3.put_object(
+        Body=json.dumps(prediction_data),
+        Bucket='predictions',
+        Key=prediction_file_path
+    )
 
     return True
 
@@ -40,8 +51,12 @@ def save_prediction(
 
 
 def list_models_with_predictions():
-    model_dirs = glob(f'{PREDICTIONS_DIR}/*/*/*')
-    return [d.split('/')[2:] for d in model_dirs]
+    all_objects = s3.list_objects(Bucket='predictions')['Contents']
+    model_dirs = ['/'.join(obj['Key'].split('/')[:3]) for obj in all_objects]
+    print(model_dirs)
+    models = list(set(model_dirs))
+    models = [model.split('/') for model in models]
+    return models
 
 # Get saved predictions for a specific model
 
@@ -51,17 +66,24 @@ def get_predictions(
         model_flavor: str,
         model_version_or_alias: str
 ):
-    prediction_directory = os.path.join(
-        PREDICTIONS_DIR, model_name, model_flavor, model_version_or_alias)
-    if not os.path.exists(prediction_directory):
+    # Return all files for the specific model name, flavor, version combination
+    all_objects = s3.list_objects(Bucket='predictions')['Contents']
+    all_files = [f['Key'] for f in all_objects if f['Key'].startswith(
+        f'{model_name}/{model_flavor}/{model_version_or_alias}')]
+
+    # Return None if no feedback comes back
+    if len(all_files) == 0:
         return None
 
-    files = os.listdir(prediction_directory)
-
+    # Get the predictions back
     predictions = {}
-    for file in files:
-        with open(os.path.join(prediction_directory, file), 'r') as f:
-            predictions[file] = json.load(f)
+    for filename in all_files:
+        timestamp = filename.split('/')[-1]
+        file_obj = BytesIO()
+        s3.download_fileobj('predictions', filename, file_obj)
+        file_obj.seek(0)
+        content = json.load(file_obj)
+        predictions[timestamp] = content
 
     return predictions
 
@@ -300,8 +322,13 @@ def load_models_from_cache():
     '''
     Load models from the cache directory
     '''
+
     try:
-        with open(SERVED_MODEL_CACHE_FILE, 'r') as f:
-            return json.load(f)
-    except Exception:
+        file_obj = BytesIO()
+        s3.download_fileobj('model-cache', 'models.json', file_obj)
+        file_obj.seek(0)
+        models = json.load(file_obj)
+        return models
+
+    except Exception as e:
         return None

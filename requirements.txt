@@ -14,5 +14,6 @@ tf-keras
 mlflow
 psutil
 docker
+boto3
 torch
 lz4
