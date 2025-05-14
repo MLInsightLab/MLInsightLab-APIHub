@@ -1,8 +1,7 @@
-from global_variables import PREDICTIONS_DIR, ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, ALLOWED_PREDICT_FUNCTIONS, SERVED_MODEL_CACHE_FILE
+from global_variables import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, ALLOWED_PREDICT_FUNCTIONS
 from transformers import pipeline, BitsAndBytesConfig
 from templates import PredictRequest
 from io import BytesIO
-from glob import glob
 import datetime as dt
 import numpy as np
 import subprocess

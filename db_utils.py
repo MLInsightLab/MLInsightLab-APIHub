@@ -1,5 +1,5 @@
-from global_variables import DB_FILE, ADMIN_USERNAME, HASHED_ADMIN_KEY, HASHED_ADMIN_PASSWORD
-import sqlite3
+from global_variables import ADMIN_USERNAME, HASHED_ADMIN_KEY, HASHED_ADMIN_PASSWORD, DB_CONNECTION_STRING
+import psycopg2
 import argon2
 import string
 import random
@@ -58,25 +58,25 @@ def setup_database():
     NOTE: Can be run safely even if the database has already been created
     '''
 
-    # Create the users table if it does not already exist
-    con = sqlite3.connect(DB_FILE)
-    con.execute(
-        'CREATE TABLE IF NOT EXISTS users(username, role, key, password)')
+    # Create table
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        'CREATE TABLE IF NOT EXISTS users(username VARCHAR(255), role VARCHAR(255), key VARCHAR(255), password VARCHAR(255));'
+    )
     con.commit()
+    cursor.close()
     con.close()
 
-    # Add the admin user to users table if they do not already exist
-    con = sqlite3.connect(DB_FILE)
-
-    # Check whether the user already exists in the table
-    res = con.execute(f'SELECT * FROM users WHERE username="{ADMIN_USERNAME}"')
-    if len(res.fetchall()) == 0:
-        con.execute(
-            f'INSERT INTO users VALUES ("{ADMIN_USERNAME}", "admin", "{HASHED_ADMIN_KEY}", "{HASHED_ADMIN_PASSWORD}")')
-        con.commit()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"INSERT INTO users (username, role, key, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}');"
+    )
+    con.commit()
+    cursor.close()
     con.close()
 
-    # Return True for completeness
     return True
 
 # Validate user's key
@@ -91,10 +91,14 @@ def validate_user_key(username, key):
     If unsuccessful, raises an appropriate Exception
     '''
 
-    # Query the database for the user's information
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    # Execute the query on the database
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # If there is not record for the user in the database, then the user does not exist -> raise ValueError
     if len(res) == 0:
@@ -126,10 +130,14 @@ def validate_user_password(username, password):
     If unsuccessful, raises an appropriate Exception
     '''
 
-    # Query the database for the user's information
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    # Execute the query on the database
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # If there is not record for the user in the database, then the user does not exist -> raise ValueError
     if len(res) == 0:
@@ -162,9 +170,14 @@ def fcreate_user(username, role, api_key=None, password=None):
     '''
 
     # Establish connection to the database and check for the username already existing
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
+
     if len(res) > 0:
         raise ValueError('Username already exists')
 
@@ -187,9 +200,13 @@ def fcreate_user(username, role, api_key=None, password=None):
     hashed_password = argon2.PasswordHasher().hash(password)
 
     # Insert new user into the database
-    con.execute(
-        f'INSERT INTO users VALUES ("{username}", "{role}", "{hashed_api_key}", "{hashed_password}")')
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"INSERT INTO users (username, role, key, password) VALUES ('{username}', '{role}', '{hashed_api_key}', '{hashed_password}');"
+    )
     con.commit()
+    cursor.close()
     con.close()
 
     return api_key, password
@@ -202,10 +219,13 @@ def fdelete_user(username):
     Delete a user from the database
     '''
 
-    # Connect to the database
-    con = sqlite3.connect(DB_FILE)
-    con.execute(f'DELETE FROM users WHERE username="{username}"')
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"DELETE FROM users WHERE username='{username}';"
+    )
     con.commit()
+    cursor.close()
     con.close()
 
     return True
@@ -221,9 +241,13 @@ def fissue_new_api_key(username, key=None):
     '''
 
     # Connect to the database and ensure that the user already exists
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # Validate that only one user with that username exists
     if len(res) == 0:
@@ -239,9 +263,13 @@ def fissue_new_api_key(username, key=None):
     hashed_key = argon2.PasswordHasher().hash(key)
 
     # Update user in the database
-    con.execute(
-        f'UPDATE users SET key="{hashed_key}" WHERE username="{username}"')
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"UPDATE users SET key='{hashed_key}' WHERE username='{username}';"
+    )
     con.commit()
+    cursor.close()
     con.close()
 
     # Return the new API key
@@ -259,9 +287,13 @@ def fissue_new_password(username, password=None):
     '''
 
     # Connect to the database and ensure that the user already exists
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # Validate that only one user with that username exists
     if len(res) == 0:
@@ -280,9 +312,13 @@ def fissue_new_password(username, password=None):
     hashed_password = argon2.PasswordHasher().hash(password)
 
     # Update user in the database
-    con.execute(
-        f'UPDATE users SET password="{hashed_password}" WHERE username="{username}"')
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"UPDATE users SET password='{hashed_password}' WHERE username='{username}';"
+    )
     con.commit()
+    cursor.close()
     con.close()
 
     # Return the new password
@@ -297,10 +333,13 @@ def fget_user_role(username):
     '''
 
     # Connect to the database and ensure the user already exists
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"'
-    ).fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # Validate thatonly oneuser with that username exists
     if len(res) == 0:
@@ -321,9 +360,13 @@ def fupdate_user_role(username, new_role):
     '''
 
     # Connect to the database and ensure that the user already exists
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute(
-        f'SELECT * FROM users WHERE username="{username}"').fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"SELECT * FROM users WHERE username='{username}';"
+    )
+    res = cursor.fetchall()
+    con.close()
 
     # Validate that only one user with that username exists
     if len(res) == 0:
@@ -335,9 +378,13 @@ def fupdate_user_role(username, new_role):
     validate_role(new_role)
 
     # Update user role in the database
-    con.execute(
-        f'UPDATE users SET role="{new_role}" WHERE username="{username}"')
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute(
+        f"UPDATE users SET role='{new_role}' WHERE username='{username}';"
+    )
     con.commit()
+    cursor.close()
     con.close()
 
     return new_role
@@ -351,7 +398,9 @@ def flist_users():
     '''
 
     # Connect to the database
-    con = sqlite3.connect(DB_FILE)
-    res = con.execute('SELECT username, role FROM users').fetchall()
+    con = psycopg2.connect(DB_CONNECTION_STRING)
+    cursor = con.cursor()
+    cursor.execute('SELECT username, role FROM users;')
+    res = cursor.fetchall()
     con.close()
     return res

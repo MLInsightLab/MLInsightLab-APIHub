@@ -2,6 +2,7 @@ python-jose[cryptography]
 fastapi[standard]
 uvicorn[standard]
 python-multipart
+psycopg2-binary
 mlinsightlab
 transformers
 bitsandbytes

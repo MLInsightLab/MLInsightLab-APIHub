@@ -18,7 +18,7 @@ import os
 # Internal imports
 from db_utils import setup_database, validate_user_key, validate_user_password, fcreate_user, fdelete_user, fissue_new_api_key, fissue_new_password, fget_user_role, fupdate_user_role, flist_users
 from model_utils import load_models_from_cache, fload_model, predict_model, save_prediction, list_models_with_predictions, get_predictions, s3
-from global_variables import SERVED_MODEL_CACHE_FILE, VARIABLE_STORE_FILE, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR
+from global_variables import TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR
 from fs_utils import upload_data_to_fs, download_data_from_fs, list_fs_directory
 from templates import *
 
@@ -52,10 +52,11 @@ manager = ModelManager(
 )
 
 # Load the variable store. If the file doesn't exist, set to empty
-# TODO: Move to using minio for this instead
 try:
-    with open(VARIABLE_STORE_FILE, 'r') as f:
-        variable_store = json.load(f)
+    file_obj = BytesIO()
+    s3.download_fileobj('variables', 'variables.json', file_obj)
+    file_obj.seek(0)
+    variable_store = json.load(file_obj)
 except Exception:
     variable_store = {}
 
@@ -1091,7 +1092,6 @@ def list_files(body: DataListRequest, user_properties: dict = Depends(verify_cre
         )
 
 # Get a variable from the variable store
-# TODO: Move this to minio
 
 
 @app.get('/variable-store/get/{variable_name}')
@@ -1116,7 +1116,6 @@ def get_variable(variable_name: str, user_properties: dict = Depends(verify_cred
         )
 
 # List variables in the variable store
-# TODO: Move this to minio
 
 
 @app.get('/variable-store/list')
@@ -1136,7 +1135,6 @@ def list_variables(user_properties: dict = Depends(verify_credentials_or_token))
         return []
 
 # Set a variable in the variable store
-# TODO: Move this to minio
 
 
 @app.post('/variable-store/set')
@@ -1176,16 +1174,17 @@ def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verif
         variable_store[user_properties['username']
                        ][body.variable_name] = body.value
 
-    # Write the variable store to disk
-    with open(VARIABLE_STORE_FILE, 'w') as f:
-        json.dump(variable_store, f)
+    s3.put_object(
+        Body=json.dumps(variable_store),
+        Bucket='variables',
+        Key='variables.json'
+    )
 
     return {
         'success': True
     }
 
 # Delete a variable in the variable store
-# TODO: Move this to minio
 
 
 @app.delete('/variable-store/delete/{variable_name}')
@@ -1204,8 +1203,12 @@ def delete_variable(variable_name: str, user_properties: dict = Depends(verify_c
     # Try to delete the specified variable for the user and rewrite the variable store
     try:
         del variable_store[username][variable_name]
-        with open(VARIABLE_STORE_FILE, 'w') as f:
-            json.dump(variable_store, f)
+
+        s3.put_object(
+            Body=json.dumps(variable_store),
+            Bucket='variables',
+            Key='variables.json'
+        )
         return {
             'success': True
         }
