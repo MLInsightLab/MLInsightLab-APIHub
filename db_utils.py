@@ -71,7 +71,7 @@ def setup_database():
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"INSERT INTO users (username, role, key, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}') ON CONFLICT (username) DO NOTHING;"
+        f"INSERT INTO users (username, role, apikey, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}') ON CONFLICT (username) DO NOTHING;"
     )
     con.commit()
     cursor.close()
@@ -203,7 +203,7 @@ def fcreate_user(username, role, api_key=None, password=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"INSERT INTO users (username, role, key, password) VALUES ('{username}', '{role}', '{hashed_api_key}', '{hashed_password}');"
+        f"INSERT INTO users (username, role, apikey, password) VALUES ('{username}', '{role}', '{hashed_api_key}', '{hashed_password}');"
     )
     con.commit()
     cursor.close()
@@ -266,7 +266,7 @@ def fissue_new_api_key(username, key=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"UPDATE users SET key='{hashed_key}' WHERE username='{username}';"
+        f"UPDATE users SET apikey='{hashed_key}' WHERE username='{username}';"
     )
     con.commit()
     cursor.close()
