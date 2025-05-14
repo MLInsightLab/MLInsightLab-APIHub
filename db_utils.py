@@ -71,7 +71,7 @@ def setup_database():
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"INSERT INTO users (username, role, key, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}');"
+        f"INSERT INTO users (username, role, key, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}') ON CONFLICT (username) DO NOTHING;"
     )
     con.commit()
     cursor.close()
