@@ -62,7 +62,7 @@ def setup_database():
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        'CREATE TABLE IF NOT EXISTS users(username VARCHAR(255), role VARCHAR(255), key VARCHAR(255), password VARCHAR(255));'
+        'CREATE TABLE IF NOT EXISTS users(username TEXT UNIQUE, role TEXT, apikey TEXT, password TEXT);'
     )
     con.commit()
     cursor.close()
