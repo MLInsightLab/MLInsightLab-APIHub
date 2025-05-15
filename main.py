@@ -512,10 +512,10 @@ def redirect_docs():
 # Load model endpoint
 
 
-@app.post('/models/load')
-def load_model(body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
+@app.post('/models/deploy')
+def deploy_model(body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
-    Load and deploy a model
+    Deploy a model to the platform
 
     Parameters
     ----------
@@ -583,10 +583,10 @@ def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
 # Delete a loaded model
 
 
-@app.delete('/models/unload/{model_name}/{model_flavor}/{model_version_or_alias}')
-def unload_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
+@app.delete('/models/undeploy/{model_name}/{model_flavor}/{model_version_or_alias}')
+def undeploy_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
-    Unload a model from memory
+    Undeploy a model from the platform
 
     Parameters
     ----------
