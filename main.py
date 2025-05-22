@@ -109,9 +109,7 @@ try:
                         model_name=model_name,
                         model_flavor=model_flavor,
                         model_version_or_alias=model_version_or_alias,
-                        use_gpu=mlflow.transformers.is_gpu_available(),
-                        volumes={DATA_VOLUME_MOUNT: {
-                            'bind': '/data', 'mode': 'rw'}}
+                        use_gpu=mlflow.transformers.is_gpu_available()
                     )
                 except Exception:
                     raise ValueError('Model not able to be loaded')
@@ -281,7 +279,6 @@ def load_model_background(
                 model_flavor=model_flavor,
                 model_version_or_alias=model_version_or_alias,
                 use_gpu=mlflow.transformers.is_gpu_available(),
-                volumes={DATA_VOLUME_MOUNT: {'bind': '/data', 'mode': 'rw'}}
             )
         except Exception:
             raise ValueError('Model not able to be loaded')
@@ -994,102 +991,6 @@ def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
         'cpu_memory_usage': cpu_memory_output,
         'gpu_memory_usage': gpu_memory_output
     }
-
-# Upload data to the data store
-
-
-@app.post('/data/upload')
-def upload_file(body: DataUploadRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    '''
-    Upload a file to the data store
-
-    Parameters
-    ----------
-    body : DataUploadRequest
-        Properties of the file to upload
-
-    Returns
-    -------
-    filename : str
-        The full path to the file on disk, in the data directory
-    '''
-
-    try:
-        filename = upload_data_to_fs(
-            body.filename,
-            body.file_bytes,
-            body.overwrite
-        )
-        return filename
-    except Exception as e:
-        raise HTTPException(
-            400,
-            f'The following error occurred: {str(e)}'
-        )
-
-# Download data from the data store
-
-
-@app.post('/data/download')
-def download_file(body: DataDownloadRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    '''
-    Download a file from the data drive
-
-    Parameters
-    ----------
-    body : DataDownloadRequest
-        The information about the file to download
-
-    Returns
-    -------
-    content : str
-        The content of the file, as a string
-    '''
-    if user_properties['role'] not in ['admin', 'data_scientist']:
-        raise HTTPException(
-            403,
-            'User does not have permissions'
-        )
-
-    try:
-        content = download_data_from_fs(
-            body.filename
-        )
-        return content
-
-    except Exception as e:
-        raise HTTPException(
-            400,
-            f'The following error occurred: {str(e)}'
-        )
-
-
-# List data in the data store
-
-
-@app.post('/data/list')
-def list_files(body: DataListRequest, user_properties: dict = Depends(verify_credentials_or_token)):
-    '''
-    List data files within a directory in the data store
-
-    Parameters
-    ----------
-    body : DataListRequest
-        The information about the directory to list
-
-    Returns
-    -------
-    files : str
-        The files and directories within the directory
-    '''
-
-    try:
-        return list_fs_directory(body.directory)
-    except Exception as e:
-        raise HTTPException(
-            500,
-            f'The following error occurred: {str(e)}'
-        )
 
 # Get a variable from the variable store
 

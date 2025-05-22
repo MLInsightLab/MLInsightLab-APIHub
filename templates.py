@@ -28,16 +28,6 @@ class UserInfo(BaseModel):
     password: str | None = None
 
 
-class DataUploadRequest(BaseModel):
-    filename: str
-    file_bytes: str
-    overwrite: bool = False
-
-
-class DataDownloadRequest(BaseModel):
-    filename: str
-
-
 class VariableSetRequest(BaseModel):
     variable_name: str
     value: str | int | float | bool | dict | list
@@ -56,6 +46,3 @@ class VerifyPasswordInfo(BaseModel):
     username: str
     password: str
 
-
-class DataListRequest(BaseModel):
-    directory: str | None = None
