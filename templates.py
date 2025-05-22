@@ -45,4 +45,3 @@ class VariableDeleteRequest(BaseModel):
 class VerifyPasswordInfo(BaseModel):
     username: str
     password: str
-

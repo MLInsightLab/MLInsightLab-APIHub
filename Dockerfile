@@ -3,6 +3,16 @@ FROM python:3.12-slim
 # Update software
 RUN apt update && apt upgrade -y && apt autoremove -y
 
+# Install the mc command line tool
+RUN ARCH=$(dpkg --print-architecture) && \
+    case "$ARCH" in \
+        amd64)   MC_ARCH="amd64" ;; \
+        arm64)   MC_ARCH="arm64" ;; \
+        *)       echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    curl -L -o /usr/local/bin/mc "https://dl.min.io/client/mc/release/linux-${MC_ARCH}/mc" && \
+    chmod +x /usr/local/bin/mc
+
 # Install docker command line tools
 RUN curl -fsSL https://get.docker.com | sh
 
