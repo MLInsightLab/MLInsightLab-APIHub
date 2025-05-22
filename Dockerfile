@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 # Update software
 RUN apt update && apt upgrade -y && apt autoremove -y
+RUN apt install curl
 
 # Install the mc command line tool
 RUN ARCH=$(dpkg --print-architecture) && \
