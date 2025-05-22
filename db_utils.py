@@ -6,7 +6,7 @@ import string
 import random
 import os
 
-MANAGE_STORAGE = os.getenv(MANAGE_STORAGE, 'false') == 'true'
+MANAGE_STORAGE = os.getenv('MANAGE_STORAGE', 'false') == 'true'
 
 if MANAGE_STORAGE:
     STORAGE_USERNAME = os.environ['STORAGE_USERNAME']
