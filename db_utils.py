@@ -297,7 +297,7 @@ def fcreate_user(username, role, api_key=None, password=None):
             subprocess.run(
                 [
                     'mc',
-                    'admin'
+                    'admin',
                     'group',
                     'add',
                     'local',
@@ -317,6 +317,9 @@ def fdelete_user(username):
     Delete a user from the database
     '''
 
+    # Get the user's role before deleting
+    user_role = fget_user_role(username)
+
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
@@ -327,13 +330,14 @@ def fdelete_user(username):
     con.close()
 
     # If the API Hub is managing storage, also account for that
-    if MANAGE_STORAGE and fget_user_role(username) != 'user':
+    if MANAGE_STORAGE and user_role != 'user':
         subprocess.run(
             [
                 'mc',
                 'admin',
                 'user',
                 'rm',
+                'local',
                 username
             ],
             check=True

@@ -33,7 +33,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy and install main files
 
 COPY ./db_utils.py /code/db_utils.py
-COPY ./fs_utils.py /code/fs_utils.py
 COPY ./global_variables.py /code/global_variables.py
 COPY ./main.py /code/main.py
 COPY ./model_utils.py /code/model_utils.py
