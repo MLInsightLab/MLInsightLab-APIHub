@@ -560,6 +560,7 @@ def fupdate_user_role(username, new_role):
                     'admin',
                     'user',
                     'rm',
+                    'local',
                     username
                 ]
             )
