@@ -489,6 +489,9 @@ def fupdate_user_role(username, new_role):
     Change a user's role
     '''
 
+    # Get the old role of the user
+    old_role = fget_user_role(username)
+
     # Connect to the database and ensure that the user already exists
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
@@ -517,6 +520,51 @@ def fupdate_user_role(username, new_role):
     cursor.close()
     con.close()
 
+    # If the API Hub is also managing storage, also account for that
+    if MANAGE_STORAGE:
+
+        # If the user is getting upgraded from user to data scientist or admin,
+        # create user in storage with password "password"
+        if old_role == 'user' and new_role != 'user':
+            subprocess.run(
+                [
+                    'mc',
+                    'admin',
+                    'user',
+                    'add',
+                    'local',
+                    username,
+                    'password'
+                ]
+            )
+
+            # Add user to group mlil
+            subprocess.run(
+                [
+                    'mc',
+                    'admin',
+                    'group',
+                    'add',
+                    'local',
+                    'mlil',
+                    username
+                ]
+            )
+
+        # If the user is getting downgraded from data scientist or admin to user,
+            # delete user in storage
+        if old_role != 'user' and new_role == 'user':
+            subprocess.run(
+                [
+                    'mc',
+                    'admin',
+                    'user',
+                    'rm',
+                    username
+                ]
+            )
+
+    # Return the new role
     return new_role
 
 # List all users
@@ -533,4 +581,6 @@ def flist_users():
     cursor.execute('SELECT username, role FROM users;')
     res = cursor.fetchall()
     con.close()
+
+    # Return the results
     return res
