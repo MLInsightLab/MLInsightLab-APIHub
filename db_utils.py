@@ -140,7 +140,8 @@ def setup_database():
                 'local',
                 'readwrite',
                 '--group=mlil'
-            ]
+            ],
+            check=True
         )
 
     return True
@@ -277,35 +278,34 @@ def fcreate_user(username, role, api_key=None, password=None):
 
     # If the API Hub is managing storage, also account for that
     if MANAGE_STORAGE:
-        if role != 'user':
 
-            # Create the user
-            subprocess.run(
-                [
-                    'mc',
-                    'admin',
-                    'user',
-                    'add',
-                    'local',
-                    username,
-                    password
-                ],
-                check=True
-            )
+        # Create the user
+        subprocess.run(
+            [
+                'mc',
+                'admin',
+                'user',
+                'add',
+                'local',
+                username,
+                password
+            ],
+            check=True
+        )
 
-            # Add user to group
-            subprocess.run(
-                [
-                    'mc',
-                    'admin',
-                    'group',
-                    'add',
-                    'local',
-                    'mlil',
-                    username
-                ],
-                check=True
-            )
+        # Add user to group
+        subprocess.run(
+            [
+                'mc',
+                'admin',
+                'group',
+                'add',
+                'local',
+                'mlil',
+                username
+            ],
+            check=True
+        )
 
     return api_key, password
 
@@ -330,7 +330,7 @@ def fdelete_user(username):
     con.close()
 
     # If the API Hub is managing storage, also account for that
-    if MANAGE_STORAGE and user_role != 'user':
+    if MANAGE_STORAGE:
         subprocess.run(
             [
                 'mc',
@@ -437,7 +437,7 @@ def fissue_new_password(username, password=None):
     con.close()
 
     # If the API Hub is also managing storage, also account for that
-    if MANAGE_STORAGE and fget_user_role(username) != 'user':
+    if MANAGE_STORAGE:
         subprocess.run(
             [
                 'mc',
@@ -489,9 +489,6 @@ def fupdate_user_role(username, new_role):
     Change a user's role
     '''
 
-    # Get the old role of the user
-    old_role = fget_user_role(username)
-
     # Connect to the database and ensure that the user already exists
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
@@ -519,51 +516,6 @@ def fupdate_user_role(username, new_role):
     con.commit()
     cursor.close()
     con.close()
-
-    # If the API Hub is also managing storage, also account for that
-    if MANAGE_STORAGE:
-
-        # If the user is getting upgraded from user to data scientist or admin,
-        # create user in storage with password "password"
-        if old_role == 'user' and new_role != 'user':
-            subprocess.run(
-                [
-                    'mc',
-                    'admin',
-                    'user',
-                    'add',
-                    'local',
-                    username,
-                    'password'
-                ]
-            )
-
-            # Add user to group mlil
-            subprocess.run(
-                [
-                    'mc',
-                    'admin',
-                    'group',
-                    'add',
-                    'local',
-                    'mlil',
-                    username
-                ]
-            )
-
-        # If the user is getting downgraded from data scientist or admin to user,
-            # delete user in storage
-        if old_role != 'user' and new_role == 'user':
-            subprocess.run(
-                [
-                    'mc',
-                    'admin',
-                    'user',
-                    'rm',
-                    'local',
-                    username
-                ]
-            )
 
     # Return the new role
     return new_role
