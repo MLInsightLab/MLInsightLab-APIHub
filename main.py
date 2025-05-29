@@ -611,12 +611,11 @@ def undeploy_model(model_name: str, model_flavor: str, model_version_or_alias: s
         )
 
     try:
-        if model_flavor != HUGGINGFACE_FLAVOR:
-            manager.remove_deployed_model(
-                model_name=model_name,
-                model_flavor=model_flavor,
-                model_version_or_alias=model_version_or_alias
-            )
+        manager.remove_deployed_model(
+            model_name=model_name,
+            model_flavor=model_flavor,
+            model_version_or_alias=model_version_or_alias
+        )
         del LOADED_MODELS[model_name][model_flavor][model_version_or_alias]
 
         save_models_to_cache()
