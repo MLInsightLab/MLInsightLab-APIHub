@@ -1,5 +1,4 @@
 from global_variables import ALLOWED_MODEL_FLAVORS, PYFUNC_FLAVOR, SKLEARN_FLAVOR, TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR, ALLOWED_PREDICT_FUNCTIONS
-from transformers import pipeline, BitsAndBytesConfig
 from templates import PredictRequest
 from io import BytesIO
 import datetime as dt
