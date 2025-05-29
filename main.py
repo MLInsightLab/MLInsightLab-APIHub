@@ -32,9 +32,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # The MLFlow tracking uri
 MLFLOW_TRACKING_URI = os.environ['MLFLOW_TRACKING_URI']
 
-# Data mount
-DATA_VOLUME_MOUNT = os.getenv('DATA_VOLUME_MOUNT', 'mlinsightlab_data')
-
 # Set up the OAuth2 schema
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token', auto_error=False)
 
@@ -79,7 +76,7 @@ try:
 
         try:
 
-            # Only huggingface models are the ones that aren't loaded using the ModelManager (for now)
+            # Only huggingface models are the ones that aren't loaded via MLflow
             if model_flavor != HUGGINGFACE_FLAVOR:
 
                 # Get the uri of the model - first try using alias notation ('@'), then try using version notation ('/')
@@ -115,16 +112,23 @@ try:
 
                 model = manager.models[-1]
 
-            # Huggingface models are the only ones that are loaded directly
+            # Huggingface models are loaded in a slightly different manner
             else:
-                model = fload_model(
-                    model_name,
-                    model_flavor,
-                    model_version_or_alias,
-                    requirements=requirements,
-                    quantization_kwargs=quantization_kwargs,
-                    **kwargs
-                )
+                try:
+                    manager.deploy_model(
+                        model_uri=None,
+                        model_name=model_name,
+                        model_flavor=model_flavor,
+                        model_version_or_alias=model_version_or_alias,
+                        use_gpu=mlflow.transformers.is_gpu_available(),
+                        requirements=requirements,
+                        quantization_kwargs=quantization_kwargs,
+                        kwargs=kwargs
+                    )
+                except Exception:
+                    raise ValueError('Model not able to be loaded')
+
+            model = manager.models[-1]
 
             # Set up the loaded model in model directory, creating keys as necessary to do so
             if not LOADED_MODELS.get(model_name):
@@ -287,16 +291,22 @@ def load_model_background(
 
     else:
         try:
-            model = fload_model(
-                model_name,
-                model_flavor,
+            manager.deploy_model(
+                model_uri=None,
+                model_name=model_name,
+                model_flavor=model_flavor,
                 model_version_or_alias=model_version_or_alias,
+                use_gpu=mlflow.transformers.is_gpu_available(),
                 requirements=requirements,
                 quantization_kwargs=quantization_kwargs,
-                **kwargs
+                kwargs=kwargs
             )
-        except Exception:
+
+        except Exception as e:
             raise ValueError('Model not able to be loaded')
+
+        # Get the model as the last model in the model manager
+        model = manager.models[-1]
 
     if not LOADED_MODELS.get(model_name):
         LOADED_MODELS[model_name] = {

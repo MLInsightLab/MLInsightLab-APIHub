@@ -4,17 +4,10 @@ uvicorn[standard]
 python-multipart
 psycopg2-binary
 mlinsightlab
-transformers
-bitsandbytes
-torchvision
 argon2-cffi
-accelerate
-tensorflow
 pydantic
-tf-keras
 mlflow
 psutil
 docker
 boto3
-torch
 lz4
