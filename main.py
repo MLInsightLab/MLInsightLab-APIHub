@@ -17,7 +17,7 @@ import os
 
 # Internal imports
 from db_utils import setup_database, validate_user_key, validate_user_password, fcreate_user, fdelete_user, fissue_new_api_key, fissue_new_password, fget_user_role, fupdate_user_role, flist_users
-from model_utils import load_models_from_cache, fload_model, predict_model, save_prediction, list_models_with_predictions, get_predictions, s3
+from model_utils import load_models_from_cache, predict_model, save_prediction, list_models_with_predictions, get_predictions, s3
 from global_variables import TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR
 from templates import *
 
@@ -160,44 +160,7 @@ try:
                 }
 
         except Exception:
-            try:
-                model = fload_model(
-                    model_name,
-                    model_flavor,
-                    model_alias=model_version_or_alias,
-                    requirements=requirements,
-                    quantization_kwargs=quantization_kwargs,
-                    **kwargs
-                )
-                if not LOADED_MODELS.get(model_name):
-                    LOADED_MODELS[model_name] = {
-                        model_flavor: {
-                            model_version_or_alias: {
-                                'model': model,
-                                'requirements': requirements,
-                                'quantization_kwargs': quantization_kwargs,
-                                'kwargs': kwargs
-                            }
-                        }
-                    }
-                elif not LOADED_MODELS[model_name].get(model_flavor):
-                    LOADED_MODELS[model_name][model_flavor] = {
-                        model_version_or_alias: {
-                            'model': model,
-                            'requirements': requirements,
-                            'quantization_kwargs': quantization_kwargs,
-                            'kwargs': kwargs
-                        }
-                    }
-                elif not LOADED_MODELS[model_flavor].get(model_version_or_alias):
-                    LOADED_MODELS[model_name][model_flavor][model_version_or_alias] = {
-                        'model': model,
-                        'requirements': requirements,
-                        'quantization_kwargs': quantization_kwargs,
-                        'kwargs': kwargs
-                    }
-            except Exception:
-                raise ValueError('Model not able to be loaded')
+            raise ValueError('Model not able to be loaded')
 
 # If there's an error loading models from the get-go, clear all models
 except Exception:
@@ -290,6 +253,7 @@ def load_model_background(
         model = manager.models[-1]
 
     else:
+        # If the model is a huggingface model
         try:
             manager.deploy_model(
                 model_uri=None,
@@ -687,6 +651,42 @@ def predict(body: PredictRequest, user_properties: dict = Depends(verify_credent
         return prediction
     except Exception as e:
         raise HTTPException(400, str(e))
+
+# Get logs from a model
+
+
+@app.get('/model-logs/{model_name}/{model_flavor}/{model_version_or_alias}')
+def get_model_logs(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
+    '''
+    Get logs for a deployed model container
+
+    Paramters
+    ---------
+    model_name : str
+        The name of the model
+    model_flavor : str
+        The flavor of the model
+    model_version_or_alias : str or int
+        The version or alias of the model
+    '''
+
+    if user_properties['role'] not in ['admin', 'data_scientist']:
+        raise HTTPException(
+            403,
+            'User does not have permission'
+        )
+
+    try:
+        logs = manager.get_model_logs(
+            model_name,
+            model_flavor,
+            model_version_or_alias
+        )
+        return {
+            'logs': logs
+        }
+    except Exception:
+        raise HTTPException(404, 'Model not found')
 
 # List models with logged predictions
 

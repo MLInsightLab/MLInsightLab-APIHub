@@ -78,8 +78,19 @@ def setup_database():
 
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
+    query = '''
+    INSERT INTO users (username, role, apikey, password) VALUES (%s, %s, %s, %s)
+    ON CONFLICT (username) DO NOTHING;
+    '''
+    params = (
+        ADMIN_USERNAME,
+        'admin',
+        HASHED_ADMIN_KEY,
+        HASHED_ADMIN_PASSWORD
+    )
     cursor.execute(
-        f"INSERT INTO users (username, role, apikey, password) VALUES ('{ADMIN_USERNAME}', 'admin', '{HASHED_ADMIN_KEY}', '{HASHED_ADMIN_PASSWORD}') ON CONFLICT (username) DO NOTHING;"
+        query,
+        params
     )
     con.commit()
     cursor.close()
@@ -162,7 +173,7 @@ def validate_user_key(username, key):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -201,7 +212,7 @@ def validate_user_password(username, password):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -240,7 +251,7 @@ def fcreate_user(username, role, api_key=None, password=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -270,7 +281,8 @@ def fcreate_user(username, role, api_key=None, password=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"INSERT INTO users (username, role, apikey, password) VALUES ('{username}', '{role}', '{hashed_api_key}', '{hashed_password}');"
+        "INSERT INTO users (username, role, apikey, password) VALUES (%s, %s, %s, %s);", (
+            username, role, hashed_api_key, hashed_password)
     )
     con.commit()
     cursor.close()
@@ -323,7 +335,7 @@ def fdelete_user(username):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"DELETE FROM users WHERE username='{username}';"
+        "DELETE FROM users WHERE username=%s;", (username,)
     )
     con.commit()
     cursor.close()
@@ -359,7 +371,7 @@ def fissue_new_api_key(username, key=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -381,7 +393,7 @@ def fissue_new_api_key(username, key=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"UPDATE users SET apikey='{hashed_key}' WHERE username='{username}';"
+        "UPDATE users SET apikey=%s WHERE username=%s;", (hashed_key, username)
     )
     con.commit()
     cursor.close()
@@ -405,7 +417,7 @@ def fissue_new_password(username, password=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -430,7 +442,8 @@ def fissue_new_password(username, password=None):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"UPDATE users SET password='{hashed_password}' WHERE username='{username}';"
+        "UPDATE users SET password=%s WHERE username=%s;", (
+            hashed_password, username)
     )
     con.commit()
     cursor.close()
@@ -466,7 +479,7 @@ def fget_user_role(username):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -493,7 +506,7 @@ def fupdate_user_role(username, new_role):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"SELECT * FROM users WHERE username='{username}';"
+        "SELECT * FROM users WHERE username=%s;", (username,)
     )
     res = cursor.fetchall()
     con.close()
@@ -511,7 +524,7 @@ def fupdate_user_role(username, new_role):
     con = psycopg2.connect(DB_CONNECTION_STRING)
     cursor = con.cursor()
     cursor.execute(
-        f"UPDATE users SET role='{new_role}' WHERE username='{username}';"
+        "UPDATE users SET role=%s WHERE username=%s;", (new_role, username)
     )
     con.commit()
     cursor.close()
