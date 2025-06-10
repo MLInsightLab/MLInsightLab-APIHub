@@ -1,9 +1,9 @@
-FROM python:3.12
+FROM python:3.12-slim
 
 # Update software and install dependencies
 RUN apt update && \
     apt upgrade -y && \
-    apt install -y curl ca-certificates && \
+    apt install -y curl ca-certificates build-essentials && \
     apt autoremove -y && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
