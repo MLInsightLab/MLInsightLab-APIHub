@@ -470,6 +470,8 @@ def verify_password(body: VerifyPasswordInfo):
         raise HTTPException(401, 'Incorrect credentials')
 
 # Verify a user's token
+
+
 @app.post('/token/verify')
 def verify_token(body: VerifyTokenInfo):
     '''

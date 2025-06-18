@@ -46,6 +46,7 @@ class VerifyPasswordInfo(BaseModel):
     username: str
     password: str
 
+
 class VerifyTokenInfo(BaseModel):
     username: str
     token: str
