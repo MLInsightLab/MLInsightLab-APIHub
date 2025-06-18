@@ -469,6 +469,27 @@ def verify_password(body: VerifyPasswordInfo):
     except Exception:
         raise HTTPException(401, 'Incorrect credentials')
 
+# Verify a user's token
+@app.post('/token/verify')
+def verify_token(body: VerifyTokenInfo):
+    '''
+    Verify a token
+
+    Parameters
+    ----------
+    username : str
+        The user's username
+    password : str
+        The user's token
+    '''
+
+    try:
+        role = verify_jwt_token(body.token)['role']
+        return role
+    except Exception:
+        raise HTTPException(401, 'Incorrect credentials')
+
+
 # Redirect to docs for the landing page
 
 
