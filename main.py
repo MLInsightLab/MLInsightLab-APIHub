@@ -1,8 +1,8 @@
 # External imports
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import FastAPI, HTTPException, Depends, Body, BackgroundTasks
+from fastapi.responses import RedirectResponse, StreamingResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Depends, Body, BackgroundTasks, Request
 from datetime import datetime, timedelta, timezone
-from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 from jose import JWTError, jwt
 from io import BytesIO
@@ -12,6 +12,7 @@ import secrets
 import mlflow
 import signal
 import string
+import httpx
 import json
 import os
 
@@ -1151,3 +1152,94 @@ def delete_variable(variable_name: str, user_properties: dict = Depends(verify_c
             404,
             'No variable to delete'
         )
+
+# Ollama proxy
+
+
+@app.api_route('/ollama/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+async def proxy_ollama(
+    path: str,
+    request: Request,
+    user_properties: dict = Depends(verify_credentials_or_token)
+):
+    '''
+    Proxy to Ollama API — auto-detects if the request is for streaming and adapts.
+    '''
+
+    if user_properties['role'] not in ['admin', 'data_scientist']:
+        raise HTTPException(403, 'User does not have permissions')
+
+    ollama_base_url = os.getenv('OLLAMA_HOST')
+    upstream_url = f'{ollama_base_url.rstrip('/')}/{path.lstrip('/')}'
+
+    headers = dict(request.headers)
+    headers.pop('host', None)
+
+    # Read body and detect stream=true if it's JSON
+    body_bytes = await request.body()
+    content_type = request.headers.get('content-type', '')
+
+    is_stream = False
+    json_body = None
+
+    if 'application/json' in content_type.lower():
+        try:
+            json_body = json.loads(body_bytes.decode())
+            is_stream = json_body.get('stream', False) is True
+        except Exception:
+            # Malformed JSON? Play it safe
+            is_stream = False
+
+    async with httpx.AsyncClient(timeout=None) as client:
+        try:
+            if is_stream:
+                async def stream_data():
+                    async with client.stream(
+                        method=request.method,
+                        url=upstream_url,
+                        headers=headers,
+                        json=json_body,
+                        params=request.query_params,
+                    ) as upstream_response:
+                        nonlocal response_status_code, response_media_type
+                        response_status_code = upstream_response.status_code
+                        response_media_type = upstream_response.headers.get(
+                            "content-type", "application/octet-stream")
+
+                        async for chunk in upstream_response.aiter_bytes():
+                            yield chunk
+
+                # Use placeholder variables to be populated in the stream_data generator
+                response_status_code = 200
+                response_media_type = "application/octet-stream"
+
+                return StreamingResponse(
+                    stream_data(),
+                    status_code=response_status_code,
+                    media_type=response_media_type,
+                )
+            else:
+                # Standard (non-streaming) response
+                upstream_response = await client.request(
+                    method=request.method,
+                    url=upstream_url,
+                    headers=headers,
+                    content=body_bytes,
+                    params=request.query_params
+                )
+
+                content_type = upstream_response.headers.get(
+                    'content-type', '')
+                if 'application/json' in content_type:
+                    return JSONResponse(
+                        status_code=upstream_response.status_code,
+                        content=upstream_response.json()
+                    )
+                else:
+                    return Response(
+                        content=upstream_response.content,
+                        status_code=upstream_response.status_code,
+                        media_type=content_type
+                    )
+        except httpx.RequestError as e:
+            raise HTTPException(502, f'Upstream request failed: {str(e)}')
