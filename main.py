@@ -1,19 +1,26 @@
 # External imports
 from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse, StreamingResponse, JSONResponse, Response
-from fastapi import FastAPI, HTTPException, Depends, Body, BackgroundTasks, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Depends, Body, BackgroundTasks, Request, Form
+from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime, timedelta, timezone
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from urllib.parse import urljoin
 from jose import JWTError, jwt
 from io import BytesIO
 import numpy as np
 import subprocess
+import requests
 import secrets
 import mlflow
 import signal
 import string
+import base64
 import httpx
 import json
+import time
 import os
 
 # Internal imports
@@ -33,8 +40,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # The MLFlow tracking uri
 MLFLOW_TRACKING_URI = os.environ['MLFLOW_TRACKING_URI']
 
+# API URL
+API_URL = os.environ['API_URL']
+
 # Set up the OAuth2 schema
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token', auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/token', auto_error=False)
 
 # Set up the database
 setup_database()
@@ -335,8 +345,19 @@ async def lifespan(app: FastAPI):
     # Remove all models held by the manager on shutdown
     manager.remove_all_models()
 
+# Timeout in seconds
+INACTIVITY_TIMEOUT = os.getenv('INACTIVITY_TIMEOUT')
+if INACTIVITY_TIMEOUT:
+    INACTIVITY_TIMEOUT = int(INACTIVITY_TIMEOUT)
+else:
+    # Default value of 30 minutes if not otherwise provided
+    INACTIVITY_TIMEOUT = 30 * 60
+
 # Initialize the app and Basic Auth
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+templates = Jinja2Templates(directory='templates')
+app.mount('/static', StaticFiles(directory='static'), name='static')
 security = HTTPBasic(auto_error=False)
 
 # Function to verify user credentials
@@ -429,7 +450,205 @@ def verify_credentials_or_token(
         )
 
 
-@app.post('/token')
+# Function to authenticate
+
+
+def authenticate(username: str, password: str):
+    '''
+    Authenticate a user
+
+    Parameters
+    ----------
+    username: str
+        The username
+    password: str
+        The password
+
+    Returns
+    -------
+    authenticated: bool
+        Whether authenticated or not
+    '''
+    with requests.Session() as sess:
+        resp = sess.post(
+            f'{API_URL}/password/verify',
+            json={
+                'username': username,
+                'password': password
+            }
+        )
+    if resp.ok:
+        return True
+
+
+# Function to check for inactivity
+def check_inactivity(request: Request):
+    '''
+    Check for inactivity based on request
+
+    Returns
+    -------
+    is_ok: bool
+        Returns True if not timed out, False if timed out
+    '''
+    last_active = request.session.get('last_active', None)
+    if last_active:
+        if time.time() - last_active > INACTIVITY_TIMEOUT:
+            request.session.clear()
+            return False
+    request.session['last_active'] = time.time()
+    return True
+
+
+@app.get('/login', response_class=HTMLResponse)
+async def login_form(request: Request):
+    '''Login page'''
+    return templates.TemplateResponse('login.html', {'request': request})
+
+
+@app.post('/api/login')
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    '''Login POST endpoint'''
+
+    # Attempt to authenticate - if successful, go to home page
+    if authenticate(username, password):
+        request.session['user'] = username
+        request.session['last_active'] = time.time()
+        return RedirectResponse(url='/', status_code=302)
+
+    # Authentication not successful, tell user
+    return templates.TemplateResponse('login.html', {'request': request, 'error': 'Invalid credentials'})
+
+
+@app.get('/logout')
+async def logout(request: Request):
+    '''Logout page'''
+
+    # Clear the session
+    request.session.clear()
+
+    # Go back to login page
+    return RedirectResponse(url='/login')
+
+
+@app.get('/', response_class=HTMLResponse)
+async def home(request: Request):
+    '''Home page'''
+
+    # Always check for authentication and session
+    if 'user' not in request.session or not check_inactivity(request):
+        return RedirectResponse(url='/login')
+
+    # Return home page template
+    return templates.TemplateResponse('home.html', {'request': request})
+
+
+@app.api_route('/mlflow/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
+async def proxy_mlflow(path: str, request: Request):
+    '''Page for proxying MLflow (both API and UI pages)'''
+
+    # Check if the user is authenticated via session
+    user = request.session.get('user')
+
+    # If not authenticated via session, try basic auth (API)
+    if not user:
+
+        # Attempt to get credentials from Basic Auth header
+        auth = request.headers.get('Authorization')
+
+        if auth and auth.startswith('Basic '):
+
+            # Decode the credentials from base64
+            auth_str = auth[len('Basic '):]
+            try:
+                decoded = base64.b64decode(auth_str).decode('utf-8')
+                username, password = decoded.split(':', 1)
+            except Exception:
+                raise HTTPException(401, 'Unauthenticated')
+
+            # Attempt to authenticate using the provided username and password
+            if not authenticate(username, password):
+                raise HTTPException(401, 'Unauthenticated')
+
+            # Success
+            user = username
+        else:
+            return RedirectResponse(url='/login')
+
+    # Session is valid or basic authentication is successful
+    with requests.Session() as sess:
+        resp = sess.get(f'{API_URL}/users/role/{user}')
+    role = resp.json()
+
+    # If role is not admin or data scientist, user can't access
+    if role not in ['admin', 'data_scientist']:
+        return RedirectResponse(url='/login')
+
+    # Get the URI and the query
+    mlflow_url = urljoin(MLFLOW_TRACKING_URI, path)
+    query_string = request.url.query
+
+    # Proxy request to MLflow service
+    response = requests.request(
+        method=request.method,
+        url=mlflow_url,
+        headers={key: value for (key, value)
+                 in request.headers.items() if key != 'Host'},
+        params=query_string,
+        data=await request.body(),
+        cookies=request.cookies,
+        allow_redirects=False,
+    )
+
+    # Get the response
+    client_response = Response(
+        content=response.content,
+        status_code=response.status_code,
+        headers={key: value for key, value in response.headers.items()
+                 if key.lower() != 'transfer-encoding'}
+    )
+
+    # Return the response
+    return client_response
+
+
+@app.get('/users', response_class=HTMLResponse)
+async def user_settings(request: Request):
+    '''User settings page'''
+
+    # Always check for session
+    if 'user' not in request.session or not check_inactivity(request):
+        return RedirectResponse(url='/login')
+
+    # Return the user management page
+    return templates.TemplateResponse('user_management.html', {'request': request})
+
+
+@app.get('/models', response_class=HTMLResponse)
+async def list_models(request: Request):
+    '''Models page'''
+
+    # Always check for session
+    if 'user' not in request.session or not check_inactivity(request):
+        return RedirectResponse(url='/login')
+
+    # Return the models page
+    return templates.TemplateResponse('list_models.html', {'request': request})
+
+
+@app.get('/variables', response_class=HTMLResponse)
+async def manage_variables(request: Request):
+    '''Manage variables page'''
+
+    # Always check for session
+    if 'user' not in request.session or not check_inactivity(request):
+        return RedirectResponse(url='/login')
+
+    # Return the variables page
+    return templates.TemplateResponse('manage_variables.html', {'request': request})
+
+
+@app.post('/api/token')
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     '''
     Login for an access token
@@ -451,7 +670,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 # Verify a user's password
 
 
-@app.post('/password/verify')
+@app.post('/api/password/verify')
 def verify_password(body: VerifyPasswordInfo):
     '''
     Verify a password
@@ -473,7 +692,7 @@ def verify_password(body: VerifyPasswordInfo):
 # Verify a user's token
 
 
-@app.post('/token/verify')
+@app.post('/api/token/verify')
 def verify_token(body: VerifyTokenInfo):
     '''
     Verify a token
@@ -496,7 +715,7 @@ def verify_token(body: VerifyTokenInfo):
 # Redirect to docs for the landing page
 
 
-@app.get('/', include_in_schema=False)
+@app.get('/api', include_in_schema=False)
 def redirect_docs():
     '''
     Redirect the main page to the docs site
@@ -506,7 +725,7 @@ def redirect_docs():
 # Load model endpoint
 
 
-@app.post('/models/deploy')
+@app.post('/api/models/deploy')
 def deploy_model(body: LoadRequest, background_tasks: BackgroundTasks, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Deploy a model to the platform
@@ -550,7 +769,7 @@ def deploy_model(body: LoadRequest, background_tasks: BackgroundTasks, user_prop
 # See loaded models
 
 
-@app.get('/models/list')
+@app.get('/api/models/list')
 def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     List loaded models
@@ -577,7 +796,7 @@ def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
 # Delete a loaded model
 
 
-@app.delete('/models/undeploy/{model_name}/{model_flavor}/{model_version_or_alias}')
+@app.delete('/api/models/undeploy/{model_name}/{model_flavor}/{model_version_or_alias}')
 def undeploy_model(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Undeploy a model from the platform
@@ -617,7 +836,7 @@ def undeploy_model(model_name: str, model_flavor: str, model_version_or_alias: s
 # Predict using a model version or alias
 
 
-@app.post('/models/predict')
+@app.post('/api/models/predict')
 def predict(body: PredictRequest, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Run prediction
@@ -679,7 +898,7 @@ def predict(body: PredictRequest, user_properties: dict = Depends(verify_credent
 # Get logs from a model
 
 
-@app.get('/model-logs/{model_name}/{model_flavor}/{model_version_or_alias}')
+@app.get('/api/model-logs/{model_name}/{model_flavor}/{model_version_or_alias}')
 def get_model_logs(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Get logs for a deployed model container
@@ -715,7 +934,7 @@ def get_model_logs(model_name: str, model_flavor: str, model_version_or_alias: s
 # List models with logged predictions
 
 
-@app.get('/predictions/models')
+@app.get('/api/predictions/models')
 def list_predicted_models(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     List models with logged predictions
@@ -738,7 +957,7 @@ def list_predicted_models(user_properties: dict = Depends(verify_credentials_or_
 # Get predictions from a single model
 
 
-@app.get('/predictions/{model_name}/{model_flavor}/{model_version_or_alias}')
+@app.get('/api/predictions/{model_name}/{model_flavor}/{model_version_or_alias}')
 def predictions(model_name: str, model_flavor: str, model_version_or_alias: str | int, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Retrieve predictions made from a model
@@ -776,7 +995,7 @@ def predictions(model_name: str, model_flavor: str, model_version_or_alias: str 
 # Create User
 
 
-@app.post('/users/create')
+@app.post('/api/users/create')
 def create_user(user_info: UserInfo, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Create a user
@@ -805,7 +1024,7 @@ def create_user(user_info: UserInfo, user_properties: dict = Depends(verify_cred
 # Delete User
 
 
-@app.delete('/users/delete/{username}')
+@app.delete('/api/users/delete/{username}')
 def delete_user(username, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Delete a user
@@ -831,7 +1050,7 @@ def delete_user(username, user_properties: dict = Depends(verify_credentials_or_
 # Issue new API key for user
 
 
-@app.put('/users/api_key/issue/{username}')
+@app.put('/api/users/api_key/issue/{username}')
 def issue_new_api_key(username, user_properties: dict = Depends(verify_credentials_password)):
     '''
     Issue a new API key for a user
@@ -860,7 +1079,7 @@ def issue_new_api_key(username, user_properties: dict = Depends(verify_credentia
 # Issue new password for user
 
 
-@app.put('/users/password/issue/{username}')
+@app.put('/api/users/password/issue/{username}')
 def issue_new_password(username, new_password: str = Body(embed=True), user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Issue a new password for a user
@@ -892,7 +1111,7 @@ def issue_new_password(username, new_password: str = Body(embed=True), user_prop
 # Get user role
 
 
-@app.get('/users/role/{username}')
+@app.get('/api/users/role/{username}')
 def get_user_role(username: str):
     '''
     Get a user's role
@@ -910,7 +1129,7 @@ def get_user_role(username: str):
 # Update user role
 
 
-@app.put('/users/role/{username}')
+@app.put('/api/users/role/{username}')
 def update_user_role(username: str, new_role=Body(embed=True), user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Update a user's role
@@ -939,7 +1158,7 @@ def update_user_role(username: str, new_role=Body(embed=True), user_properties: 
 # List users
 
 
-@app.get('/users/list')
+@app.get('/api/users/list')
 def list_users(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     List all users
@@ -951,7 +1170,7 @@ def list_users(user_properties: dict = Depends(verify_credentials_or_token)):
         raise HTTPException(500, 'An unknown error occurred')
 
 
-@app.get('/reset')
+@app.get('/api/reset')
 def reset(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Reset the API, redeploying all models
@@ -969,7 +1188,7 @@ def reset(user_properties: dict = Depends(verify_credentials_or_token)):
 
 
 # Restart the jupyter service
-@app.get('/restart-jupyter')
+@app.get('/api/restart-jupyter')
 def restart_jupyter(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Restart the jupyter service
@@ -990,7 +1209,7 @@ def restart_jupyter(user_properties: dict = Depends(verify_credentials_or_token)
 
 
 # Get system resource usage
-@app.get('/system/resource-usage')
+@app.get('/api/system/resource-usage')
 def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Get system resource usage, in terms of free CPU and GPU memory (if GPU-enabled)
@@ -1027,7 +1246,7 @@ def get_usage(user_properties: dict = Depends(verify_credentials_or_token)):
 # Get a variable from the variable store
 
 
-@app.get('/variable-store/get/{variable_name}')
+@app.get('/api/variable-store/get/{variable_name}')
 def get_variable(variable_name: str, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Retrieve a variable from the variable store
@@ -1051,7 +1270,7 @@ def get_variable(variable_name: str, user_properties: dict = Depends(verify_cred
 # List variables in the variable store
 
 
-@app.get('/variable-store/list')
+@app.get('/api/variable-store/list')
 def list_variables(user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     List Variables
@@ -1070,7 +1289,7 @@ def list_variables(user_properties: dict = Depends(verify_credentials_or_token))
 # Set a variable in the variable store
 
 
-@app.post('/variable-store/set')
+@app.post('/api/variable-store/set')
 def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Set a variable
@@ -1120,7 +1339,7 @@ def set_variable(body: VariableSetRequest, user_properties: dict = Depends(verif
 # Delete a variable in the variable store
 
 
-@app.delete('/variable-store/delete/{variable_name}')
+@app.delete('/api/variable-store/delete/{variable_name}')
 def delete_variable(variable_name: str, user_properties: dict = Depends(verify_credentials_or_token)):
     '''
     Delete a variable
@@ -1156,7 +1375,7 @@ def delete_variable(variable_name: str, user_properties: dict = Depends(verify_c
 # Ollama proxy
 
 
-@app.api_route('/ollama/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+@app.api_route('/api/ollama/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 async def proxy_ollama(
     path: str,
     request: Request,

@@ -37,10 +37,9 @@ COPY ./global_variables.py /code/global_variables.py
 COPY ./main.py /code/main.py
 COPY ./model_utils.py /code/model_utils.py
 COPY ./templates.py /code/templates.py
+COPY templates/ /code/templates/
+COPY static/ /code/static/
 
 # Add group mlil and add root to that group
 RUN groupadd -g 1004 mlil
 RUN adduser root mlil
-
-# Expose necessary port
-EXPOSE 4488

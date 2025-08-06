@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Insight Lab</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/manage_variables.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="icon" href="/static/logo.png" type="image/png"> <!-- Favicon -->
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div>
+            <a href="/"><i class="fas fa-home"></i> Home</a>
+            <a href="/models"><i class="fas fa-cubes"></i> Models</a>
+            <a href="/variables"><i class="fas fa-sliders-h"></i> User Variables</a>
+            <a href="/users"><i class="fas fa-users"></i> User Management</a>
+        </div>
+        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+
+    <div class="main-content">
+        <div class="content-header">
+            <h1>Manage User Variables</h1>
+        </div>
+
+        <!-- Form to Set New Variable -->
+        <div class="form-container">
+            <h3>Set Variable</h3>
+            <input type="text" id="newVariableName" placeholder="Variable Name" required>
+            <input type="text" id="newVariableValue" placeholder="Variable Value" required>
+            <button class="button" onclick="setVariable()">Set Variable</button>
+        </div>
+
+        <!-- Table to display existing variables -->
+        <table id="variablesTable">
+            <tr>
+                <th>Variable Name</th>
+                <th>Variable Value</th>
+                <th>Actions</th>
+            </tr>
+            <tr id="no-variables-row" style="display: none;">
+                <td colspan="3">No variables found.</td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        let username = localStorage.getItem('mlil-username');
+
+        // Fetch the list of variables from the API
+        async function fetchVariables() {
+            try {
+                const response = await fetch('/api/variable-store/list', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('mlil-token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch variables: ' + response.statusText);
+                }
+
+                const result = await response.json();
+
+                if (!result || !Array.isArray(result)) {
+                    throw new Error('Invalid response format: variables array is missing.');
+                }
+
+                const variablesWithValues = await fetchVariableValues(result);
+
+                displayVariables(variablesWithValues);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        // Fetch the value for each variable name from the API
+        async function fetchVariableValues(variableNames) {
+            const variablesWithValues = [];
+
+            for (const variableName of variableNames) {
+                try {
+                    const response = await fetch(`/api/variable-store/get/${variableName}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('mlil-token')}`
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    variablesWithValues.push({
+                        variable: variableName,
+                        variable_value: result || 'No value'
+                    });
+
+                } catch (error) {
+                    console.error(`Error fetching value for variable ${variableName}: ${error.message}`);
+                }
+            }
+
+            return variablesWithValues;
+        }
+
+        function displayVariables(variables) {
+            const table = document.getElementById("variablesTable");
+
+            while (table.rows.length > 1) {
+                table.deleteRow(1);
+            }
+
+            const noVariablesRow = document.getElementById("no-variables-row");
+
+            if (!variables || variables.length === 0) {
+                if (noVariablesRow) {
+                    noVariablesRow.style.display = "";
+                }
+                return;
+            } else {
+                if (noVariablesRow) {
+                    noVariablesRow.style.display = "none";
+                }
+            }
+
+            for (const varObj of variables) {
+                const row = table.insertRow();
+                const cellName = row.insertCell(0);
+                const cellValue = row.insertCell(1);
+                const cellActions = row.insertCell(2);
+
+                cellName.textContent = varObj.variable;
+
+                // Create a span for the hidden value
+                const valueContainer = document.createElement('span');
+                valueContainer.textContent = '•'.repeat(40);  // Hidden by default
+                valueContainer.classList.add('hidden-value');
+
+                // Create the toggle button and float it to the right
+                const toggleButton = document.createElement('span');
+                toggleButton.innerHTML = '[click to show]';
+                toggleButton.classList.add('toggle-visibility');
+                toggleButton.style.float = 'right';  // float to the right
+                toggleButton.style.cursor = 'pointer';
+
+                toggleButton.onclick = function () {
+                    if (valueContainer.textContent === '•'.repeat(40)) {
+                        valueContainer.textContent = varObj.variable_value;
+                        toggleButton.innerHTML = '[click to hide]';
+                    } else {
+                        valueContainer.textContent = '•'.repeat(40);
+                        toggleButton.innerHTML = '[click to show]';
+                    }
+                };
+
+                // Append value and toggle to value cell
+                cellValue.appendChild(valueContainer);
+                cellValue.appendChild(toggleButton);
+
+                // Create copy button and add it to actions cell
+                const copyButton = document.createElement('button');
+                copyButton.textContent = 'Copy';
+                copyButton.classList.add('copy-button');
+                copyButton.onclick = function () {
+                    navigator.clipboard.writeText(varObj.variable_value).then(() => {
+                        copyButton.textContent = 'Copied!';
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                        }, 2000);
+                    });
+                };
+
+                // Add delete button
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.classList.add('delete-button');
+                deleteButton.onclick = function () {
+                    deleteVariable(varObj.variable);
+                };
+
+                // Append copy and delete buttons to actions cell
+                cellActions.appendChild(copyButton);
+                cellActions.appendChild(deleteButton);
+            }
+        }
+
+
+        // Set a new variable using the provided name and value
+        async function setVariable() {
+            const variableName = document.getElementById("newVariableName").value;
+            const variableValue = document.getElementById("newVariableValue").value;
+
+            try {
+                const response = await fetch('/api/variable-store/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('mlil-token')}`
+                    },
+                    body: JSON.stringify({ 'username': username, variable_name: variableName, value: variableValue, overwrite: true })
+                });
+
+                document.getElementById("newVariableName").value = "";
+                document.getElementById("newVariableValue").value = "";
+
+                if (!response.ok) {
+                    throw new Error('Failed to set variable: ' + response.statusText);
+                }
+
+                const result = await response.json();
+                fetchVariables();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        // Delete a variable by its name
+        async function deleteVariable(variableName) {
+            try {
+                const response = await fetch(`/api/variable-store/delete/${variableName}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('mlil-token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete variable: ' + response.statusText);
+                }
+
+                const result = await response.json();
+                fetchVariables();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        window.onload = fetchVariables;
+    </script>
+</body>
+
+</html>
