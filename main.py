@@ -1215,26 +1215,28 @@ async def proxy_ollama(
 
         else:
             # Non-streaming response
-            upstream_response = await client.request(
-                method=request.method,
-                url=upstream_url,
-                headers=headers,
-                content=body_bytes,
-                params=request.query_params
-            )
+            async with httpx.AsyncClient(timeout=None) as client:
+                upstream_response = await client.request(
+                    method=request.method,
+                    url=upstream_url,
+                    headers=headers,
+                    content=body_bytes,
+                    params=request.query_params
+                )
 
-            content_type = upstream_response.headers.get('content-type', '')
-            if 'application/json' in content_type:
-                return JSONResponse(
-                    status_code=upstream_response.status_code,
-                    content=upstream_response.json()
-                )
-            else:
-                return Response(
-                    content=upstream_response.content,
-                    status_code=upstream_response.status_code,
-                    media_type=content_type
-                )
+                content_type = upstream_response.headers.get(
+                    'content-type', '')
+                if 'application/json' in content_type:
+                    return JSONResponse(
+                        status_code=upstream_response.status_code,
+                        content=upstream_response.json()
+                    )
+                else:
+                    return Response(
+                        content=upstream_response.content,
+                        status_code=upstream_response.status_code,
+                        media_type=content_type
+                    )
 
     except httpx.RequestError as e:
         raise HTTPException(502, f'Upstream request failed: {str(e)}')
