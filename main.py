@@ -9,6 +9,7 @@ from io import BytesIO
 import numpy as np
 import subprocess
 import secrets
+import asyncio
 import mlflow
 import signal
 import string
@@ -427,7 +428,6 @@ def verify_credentials_or_token(
             status_code=401,
             detail='No credentials provided'
         )
-
 
 @app.post('/token')
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -1193,31 +1193,24 @@ async def proxy_ollama(
     async with httpx.AsyncClient(timeout=None) as client:
         try:
             if is_stream:
-                async def stream_data():
-                    async with client.stream(
-                        method=request.method,
-                        url=upstream_url,
-                        headers=headers,
-                        json=json_body,
-                        params=request.query_params,
-                    ) as upstream_response:
-                        nonlocal response_status_code, response_media_type
-                        response_status_code = upstream_response.status_code
-                        response_media_type = upstream_response.headers.get(
-                            "content-type", "application/octet-stream")
-
-                        async for chunk in upstream_response.aiter_bytes():
+                async with client.stream(
+                    method = request.method,
+                    url = upstream_url,
+                    headers = headers,
+                    json = json_body,
+                    params = request.query_params
+                ) as upstream_response:
+                    
+                    async def stream_data():
+                        async for chunk in upstream_response.aiter_text():
                             yield chunk
+                    
+                    return StreamingResponse(
+                        stream_data(),
+                        status_code = upstream_response.status_code,
+                        media_type = upstream_response.headers.get('content-type', 'text/event-stream')
+                    )
 
-                # Use placeholder variables to be populated in the stream_data generator
-                response_status_code = 200
-                response_media_type = "application/octet-stream"
-
-                return StreamingResponse(
-                    stream_data(),
-                    status_code=response_status_code,
-                    media_type=response_media_type,
-                )
             else:
                 # Standard (non-streaming) response
                 upstream_response = await client.request(
