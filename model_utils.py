@@ -126,7 +126,7 @@ def predict_model(
             resp = sess.post(
                 f'http://{container_name}:{container_port}/predict',
                 json={
-                    'data': to_predict,
+                    'inputs': to_predict,
                     'predict_function': predict_function,
                     'convert_to_numpy': convert_to_numpy,
                     'params': params,

@@ -5,7 +5,7 @@ class PredictRequest(BaseModel):
     model_name: str
     model_flavor: str
     model_version_or_alias: str | int
-    data: list
+    inputs: list
     predict_function: str = 'predict'
     dtype: str = None
     params: dict = None

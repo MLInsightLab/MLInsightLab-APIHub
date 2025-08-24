@@ -638,20 +638,20 @@ def predict(body: PredictRequest, user_properties: dict = Depends(verify_credent
             404, 'That model is not loaded. Please load the model by calling the /models/load endpoint first'
         )
 
-    # Grab the data to predict on from the input body
+    # Grab the inputs to predict on from the input body
     try:
         if model_flavor not in [TRANSFORMERS_FLAVOR, HUGGINGFACE_FLAVOR] and body.convert_to_numpy:
-            to_predict = np.array(body.data)
+            to_predict = np.array(body.inputs)
             if body.dtype:
                 to_predict = to_predict.astype(body.dtype)
         else:
-            to_predict = body.data
+            to_predict = body.inputs
             if not isinstance(to_predict, list):
                 to_predict = [to_predict]
     except Exception:
         raise HTTPException(
             400,
-            'Data malformed and could not be processed'
+            'Inputs malformed and could not be processed'
         )
 
     try:
