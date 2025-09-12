@@ -46,7 +46,8 @@ manager = ModelManager(
     model_network=os.getenv('MODEL_NETWORK') if os.getenv(
         'MODEL_NETWORK') else 'mlinsightlab_model_network',
     mlflow_tracking_uri=MLFLOW_TRACKING_URI,
-    model_port='8888'
+    model_port='8888',
+    deploy_mode=os.getenv('DEPLOY_MODE', 'compose')
 )
 
 # Load the variable store. If the file doesn't exist, set to empty
