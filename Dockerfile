@@ -41,6 +41,3 @@ COPY ./templates.py /code/templates.py
 # Add group mlil and add root to that group
 RUN groupadd -g 1004 mlil
 RUN adduser root mlil
-
-# Expose necessary port
-EXPOSE 4488
