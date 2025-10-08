@@ -90,7 +90,7 @@ def get_predictions(
 
 def predict_model(
     model: mlflow.models.Model | dict,
-    to_predict: np.ndarray,
+    to_predict: np.ndarray | list | str | dict,
     model_flavor: str,
     predict_function: str,
     params: dict,
