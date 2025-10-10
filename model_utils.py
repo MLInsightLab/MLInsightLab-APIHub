@@ -62,7 +62,7 @@ def list_models_with_predictions():
 def get_predictions(
         model_name: str,
         model_flavor: str,
-        model_version_or_alias: str
+        model_version_or_alias: str | int
 ):
     # Return all files for the specific model name, flavor, version combination
     all_objects = s3.list_objects(Bucket='predictions')['Contents']

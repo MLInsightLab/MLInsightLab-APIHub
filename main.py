@@ -71,7 +71,7 @@ try:
     for model_info in models_to_load:
         model_name = model_info['model_name']
         model_flavor = model_info['model_flavor']
-        model_version_or_alias = model_info['model_version_or_alias']
+        model_version_or_alias = str(model_info['model_version_or_alias'])
 
         requirements = model_info.get('requirements')
         quantization_kwargs = model_info.get('quantization_kwargs')
@@ -137,7 +137,7 @@ try:
             if not LOADED_MODELS.get(model_name):
                 LOADED_MODELS[model_name] = {
                     model_flavor: {
-                        model_version_or_alias: {
+                        str(model_version_or_alias): {
                             'model': model,
                             'requirements': requirements,
                             'quantization_kwargs': quantization_kwargs,
@@ -147,7 +147,7 @@ try:
                 }
             elif not LOADED_MODELS[model_name].get(model_flavor):
                 LOADED_MODELS[model_name][model_flavor] = {
-                    model_version_or_alias: {
+                    str(model_version_or_alias): {
                         'model': model,
                         'requirements': requirements,
                         'quantization_kwargs': quantization_kwargs,
@@ -182,6 +182,7 @@ def save_models_to_cache():
         for model_name in LOADED_MODELS.keys():
             for model_flavor in LOADED_MODELS[model_name]:
                 for model_version_or_alias in LOADED_MODELS[model_name][model_flavor].keys():
+                    model_version_or_alias = str(model_version_or_alias)
                     requirements = LOADED_MODELS[model_name][model_flavor][model_version_or_alias]['requirements']
                     quantization_kwargs = LOADED_MODELS[model_name][model_flavor][
                         model_version_or_alias]['quantization_kwargs']
@@ -217,6 +218,8 @@ def load_model_background(
     '''
     Load a model in the background
     '''
+
+    model_version_or_alias = str(model_version_or_alias)
 
     if model_flavor != HUGGINGFACE_FLAVOR:
 
@@ -519,6 +522,8 @@ def deploy_model(body: LoadRequest, background_tasks: BackgroundTasks, user_prop
         Additional parameters to load the model
     '''
 
+    body.model_version_or_alias = str(body.model_version_or_alias)
+
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
             403,
@@ -565,6 +570,7 @@ def list_models(user_properties: dict = Depends(verify_credentials_or_token)):
             for model_name in LOADED_MODELS.keys():
                 for model_flavor in LOADED_MODELS[model_name]:
                     for model_version_or_alias in LOADED_MODELS[model_name][model_flavor].keys():
+                        model_version_or_alias = str(model_version_or_alias)
                         to_return.append(
                             dict(
                                 model_name=model_name,
@@ -593,6 +599,8 @@ def undeploy_model(model_name: str, model_flavor: str, model_version_or_alias: s
     model_version_or_alias : str or int
         The version or alias of the model
     '''
+
+    model_version_or_alias = str(model_version_or_alias)
 
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
@@ -627,11 +635,12 @@ def predict(body: PredictRequest, user_properties: dict = Depends(verify_credent
 
     model_name = body.model_name
     model_flavor = body.model_flavor
-    model_version_or_alias = body.model_version_or_alias
+    model_version_or_alias = str(body.model_version_or_alias)
 
     # Try to load the model, assuming it has already been loaded
     try:
-        model = LOADED_MODELS[model_name][model_flavor][model_version_or_alias]['model']
+        model = LOADED_MODELS[model_name][model_flavor][str(
+            model_version_or_alias)]['model']
     except Exception:
 
         # Model needs to be loaded
@@ -697,6 +706,8 @@ def get_model_logs(model_name: str, model_flavor: str, model_version_or_alias: s
         The version or alias of the model
     '''
 
+    model_version_or_alias = str(model_version_or_alias)
+
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(
             403,
@@ -755,6 +766,8 @@ def predictions(model_name: str, model_flavor: str, model_version_or_alias: str 
     model_version_or_alias : str | int
         The version or alias of the model
     '''
+
+    model_version_or_alias = str(model_version_or_alias)
 
     if user_properties['role'] not in ['admin', 'data_scientist']:
         raise HTTPException(

@@ -9,7 +9,7 @@ class PredictRequest(BaseModel):
     predict_function: str = 'predict'
     dtype: str = None
     params: dict = None
-    convert_to_numpy: bool = True
+    convert_to_numpy: bool = False
 
 
 class LoadRequest(BaseModel):
