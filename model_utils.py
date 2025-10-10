@@ -30,7 +30,7 @@ def save_prediction(
     username: str
 ):
     prediction_file_path = os.path.join(
-        model_name, model_flavor, model_version_or_alias, str(dt.datetime.now()))
+        model_name, model_flavor, str(model_version_or_alias), str(dt.datetime.now()))
     prediction_data = {
         'input': body.model_dump(),
         'prediction': prediction,
