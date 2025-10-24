@@ -1,4 +1,12 @@
+# Use the golang image to install mc first
+FROM golang:latest AS mc-builder
+RUN git clone https://github.com/minio/mc && cd mc && go install
+
+# Run everything else from Python
 FROM python:3.12-slim
+
+# Copy the mc binary from the golang image
+COPY --from=mc-builder /go/bin/mc /usr/local/bin/mc
 
 # Update software and install dependencies
 RUN apt update && \
