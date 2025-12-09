@@ -6,13 +6,6 @@ import string
 import random
 import os
 
-MANAGE_STORAGE = os.getenv('MANAGE_STORAGE', 'false') == 'true'
-
-if MANAGE_STORAGE:
-    STORAGE_USERNAME = os.environ['STORAGE_USERNAME']
-    STORAGE_PASSWORD = os.environ['STORAGE_PASSWORD']
-    STORAGE_HOST = os.environ['STORAGE_HOST']
-
 # Function to generate an API key
 
 
@@ -95,65 +88,6 @@ def setup_database():
     con.commit()
     cursor.close()
     con.close()
-
-    # If the API Hub is managing storage, set up the configuration for that
-    if MANAGE_STORAGE:
-
-        # First, set the alias for the command
-        subprocess.run(
-            [
-                'mc',
-                'alias',
-                'set',
-                'local',
-                STORAGE_HOST,
-                STORAGE_USERNAME,
-                STORAGE_PASSWORD
-            ],
-            check=True
-        )
-
-        # Create a new user
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'user',
-                'add',
-                'local',
-                ADMIN_USERNAME,
-                ADMIN_PASSWORD
-            ],
-            check=True
-        )
-
-        # Create the group
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'group',
-                'add',
-                'local',
-                'mlil',
-                ADMIN_USERNAME
-            ],
-            check=True
-        )
-
-        # Add the policy to the group to read and write
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'policy',
-                'attach',
-                'local',
-                'readwrite',
-                '--group=mlil'
-            ],
-            check=True
-        )
 
     return True
 
@@ -288,37 +222,6 @@ def fcreate_user(username, role, api_key=None, password=None):
     cursor.close()
     con.close()
 
-    # If the API Hub is managing storage, also account for that
-    if MANAGE_STORAGE:
-
-        # Create the user
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'user',
-                'add',
-                'local',
-                username,
-                password
-            ],
-            check=True
-        )
-
-        # Add user to group
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'group',
-                'add',
-                'local',
-                'mlil',
-                username
-            ],
-            check=True
-        )
-
     return api_key, password
 
 # Delete a user
@@ -340,20 +243,6 @@ def fdelete_user(username):
     con.commit()
     cursor.close()
     con.close()
-
-    # If the API Hub is managing storage, also account for that
-    if MANAGE_STORAGE:
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'user',
-                'rm',
-                'local',
-                username
-            ],
-            check=True
-        )
 
     return True
 
@@ -448,21 +337,6 @@ def fissue_new_password(username, password=None):
     con.commit()
     cursor.close()
     con.close()
-
-    # If the API Hub is also managing storage, also account for that
-    if MANAGE_STORAGE:
-        subprocess.run(
-            [
-                'mc',
-                'admin',
-                'user',
-                'add',
-                'local',
-                username,
-                password
-            ],
-            check=True
-        )
 
     # Return the new password
     return password

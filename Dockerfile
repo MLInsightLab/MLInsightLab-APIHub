@@ -1,12 +1,4 @@
-# Use the golang image to install mc first
-FROM golang:latest AS mc-builder
-RUN git clone https://github.com/minio/mc && cd mc && go install
-
-# Run everything else from Python
 FROM python:3.12-slim
-
-# Copy the mc binary from the golang image
-COPY --from=mc-builder /go/bin/mc /usr/local/bin/mc
 
 # Update software and install dependencies
 RUN apt update && \
@@ -15,16 +7,6 @@ RUN apt update && \
     apt autoremove -y && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
-
-# Install the mc command line tool
-RUN ARCH=$(dpkg --print-architecture) && \
-    case "$ARCH" in \
-        amd64)   MC_ARCH="amd64" ;; \
-        arm64)   MC_ARCH="arm64" ;; \
-        *)       echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac && \
-    curl -L -o /usr/local/bin/mc "https://dl.min.io/client/mc/release/linux-${MC_ARCH}/mc" && \
-    chmod +x /usr/local/bin/mc
 
 # Install docker command line tools
 RUN curl -fsSL https://get.docker.com | sh
